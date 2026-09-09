@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chess Persona</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -53,7 +54,8 @@
       background: #1a1a1a;
       border: 2px solid #333;
       border-radius: 8px;
-      padding: 10px 8px;
+      padding: 0;
+      height: 44px;
       color: #aaa;
       font-size: 0.82rem;
       font-weight: 600;
@@ -61,6 +63,9 @@
       transition: all 0.15s;
       text-align: center;
       white-space: nowrap;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .p-btn:hover { border-color: #555; color: #ddd; }
     .p-btn.active { border-color: #2563eb; color: #fff; background: #172040; }
@@ -127,11 +132,27 @@
     .sq {
       display: flex; align-items: center; justify-content: center;
       font-size: clamp(1rem, 3.5vw, 2rem); line-height: 1; user-select: none;
+      aspect-ratio: 1;
     }
     .sq.light { background: #f0d9b5; }
     .sq.dark  { background: #b58863; }
     .sq .wp { color: #fff; text-shadow: 0 0 3px #000, 0 0 5px #000; }
     .sq .bp { color: #1a1a1a; text-shadow: 0 0 2px rgba(255,255,255,0.4); }
+    .sq.selected { background: #7fc97f !important; }
+    .sq.legal-move::after {
+      content: '';
+      width: 32%; height: 32%;
+      background: rgba(0,0,0,0.18);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .sq.legal-move.occupied::after {
+      width: 100%; height: 100%;
+      border-radius: 0;
+      background: transparent;
+      outline: 4px inset rgba(0,0,0,0.22);
+    }
+    .chess-board.human-turn .sq { cursor: pointer; }
 
     /* ── Log ── */
     .log {
@@ -309,6 +330,13 @@
   let gameUrl = '';
   let bubbleCount = 0;
 
+  // ── Board interaction state ──────────────────────────────────────────────────
+  let chess       = null;   // chess.js instance
+  let selectedSq  = null;   // currently selected square
+  let legalDests  = [];     // legal destination squares for selected piece
+  let isHumanTurn = false;
+  let currentGameId = null;
+
   // ── Personality selector ─────────────────────────────────────────────────────
 
   function setPersonality(btn) {
@@ -330,14 +358,34 @@
     btn.classList.toggle('muted', ttsMuted);
   }
 
+  // ── TTS queue — no cutting off, max 2 pending ───────────────────────────────
+  const ttsQueue = [];
+  let ttsSpeaking = false;
+
   function speak(text, personality) {
     if (ttsMuted || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
+    if (ttsQueue.length >= 2) return;   // drop if backlog is long
+    ttsQueue.push({ text, personality });
+    if (!ttsSpeaking) _processQueue();
+  }
+
+  function _processQueue() {
+    if (!ttsQueue.length) { ttsSpeaking = false; return; }
+    ttsSpeaking = true;
+    const { text, personality } = ttsQueue.shift();
     const utter = new SpeechSynthesisUtterance(text);
-    const cfg = TTS_CONFIG[personality] || { rate: 1.0, pitch: 1.0 };
+    const cfg   = TTS_CONFIG[personality] || { rate: 1.0, pitch: 1.0 };
     utter.rate  = cfg.rate;
     utter.pitch = cfg.pitch;
+    utter.onend   = _processQueue;
+    utter.onerror = _processQueue;
     window.speechSynthesis.speak(utter);
+  }
+
+  function _resetTTS() {
+    window.speechSynthesis.cancel();
+    ttsQueue.length = 0;
+    ttsSpeaking = false;
   }
 
   // ── Chat bubbles ─────────────────────────────────────────────────────────────
@@ -383,28 +431,50 @@
 
   // ── Chess board ──────────────────────────────────────────────────────────────
 
+  // Expand FEN rank string into array of 8 piece chars (null = empty)
+  function expandRank(rankStr) {
+    const out = [];
+    for (const ch of rankStr) {
+      if (ch >= '1' && ch <= '8') {
+        for (let i = 0; i < +ch; i++) out.push(null);
+      } else {
+        out.push(ch);
+      }
+    }
+    return out;
+  }
+
+  // Board rendered from Black's perspective: rank 1 at top, file h on left
+  // ranks[0]=rank8 ... ranks[7]=rank1 in FEN
   function renderBoard(fen) {
     const el = document.getElementById('board');
     const placement = (fen || START_FEN).split(' ')[0];
     const ranks = placement.split('/');
     el.innerHTML = '';
-    for (let r = 0; r < 8; r++) {
-      let file = 0;
-      for (const ch of ranks[r]) {
-        if (ch >= '1' && ch <= '8') {
-          for (let i = 0; i < parseInt(ch); i++) {
-            el.appendChild(makeSquare(r, file, null)); file++;
-          }
-        } else {
-          el.appendChild(makeSquare(r, file, ch)); file++;
-        }
+
+    for (let displayRow = 0; displayRow < 8; displayRow++) {
+      // displayRow 0 = rank 1 (bottom of White's board, top of ours)
+      const fenIdx  = 7 - displayRow;      // ranks[7]=rank1, ranks[0]=rank8
+      const rankNum = displayRow + 1;      // 1 at display top, 8 at display bottom
+      const pieces  = expandRank(ranks[fenIdx]);
+
+      for (let displayCol = 0; displayCol < 8; displayCol++) {
+        // displayCol 0 = file h, displayCol 7 = file a
+        const fileIdx  = 7 - displayCol;
+        const fileChar = String.fromCharCode(97 + fileIdx);
+        const squareId = fileChar + rankNum;
+        const isLight  = (displayRow + displayCol) % 2 === 0;
+        el.appendChild(makeSquare(squareId, isLight, pieces[fileIdx]));
       }
     }
   }
 
-  function makeSquare(rank, file, piece) {
+  function makeSquare(squareId, isLight, piece) {
     const sq = document.createElement('div');
-    sq.className = 'sq ' + ((rank + file) % 2 === 0 ? 'light' : 'dark');
+    sq.className = 'sq ' + (isLight ? 'light' : 'dark');
+    sq.dataset.square = squareId;
+    if (piece) sq.classList.add('occupied');
+    sq.onclick = () => handleSquareClick(squareId);
     if (piece) {
       const span = document.createElement('span');
       span.className = piece === piece.toUpperCase() ? 'wp' : 'bp';
@@ -415,6 +485,72 @@
   }
 
   renderBoard(START_FEN);
+
+  // ── Board click logic ────────────────────────────────────────────────────────
+
+  function handleSquareClick(sq) {
+    if (!isHumanTurn || !currentGameId || !chess) return;
+
+    const piece = chess.get(sq);
+
+    if (selectedSq) {
+      if (legalDests.includes(sq)) {
+        // Build UCI — auto-promote to queen
+        let uci = selectedSq + sq;
+        const moving = chess.get(selectedSq);
+        if (moving && moving.type === 'p') {
+          const toRank = parseInt(sq[1]);
+          if (toRank === 1 || toRank === 8) uci += 'q';
+        }
+        clearSelection();
+        submitMove(uci);
+        return;
+      }
+      clearSelection();
+    }
+
+    // Select a Black piece
+    if (piece && piece.color === 'b') {
+      selectedSq  = sq;
+      legalDests  = chess.moves({ square: sq, verbose: true }).map(m => m.to);
+      highlightSquares();
+    }
+  }
+
+  function clearSelection() {
+    selectedSq = null;
+    legalDests = [];
+    document.querySelectorAll('.sq').forEach(s => {
+      s.classList.remove('selected', 'legal-move');
+    });
+  }
+
+  function highlightSquares() {
+    document.querySelectorAll('.sq').forEach(s => {
+      const id = s.dataset.square;
+      s.classList.toggle('selected',    id === selectedSq);
+      s.classList.toggle('legal-move',  legalDests.includes(id));
+    });
+  }
+
+  async function submitMove(uci) {
+    isHumanTurn = false;
+    try {
+      const res = await fetch('/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ game_id: currentGameId, uci }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setStatus(`Invalid move: ${data.detail}`, 'red');
+        isHumanTurn = true;
+      }
+    } catch (err) {
+      setStatus(`Move error: ${err.message}`, 'red');
+      isHumanTurn = true;
+    }
+  }
 
   // ── Status helper ─────────────────────────────────────────────────────────────
 
@@ -459,12 +595,15 @@
         setStatus(`Challenging ${e.opponent}…`, 'blue'); break;
 
       case 'waiting':
+        currentGameId = e.gameId;
         setStatus(`Waiting for ${e.opponent} to accept…`, 'blue');
         setGameLink(e.url);
         addLog(`Challenge sent → ${e.url}`); break;
 
       case 'started':
-        setStatus(`Game started! Playing as White.`, 'green');
+        currentGameId = e.gameId;
+        chess = new Chess();
+        setStatus(`Game started! You are Black — click your pieces to move.`, 'green');
         addLog(`${e.opponent} accepted. Game: ${e.url}`); break;
 
       case 'declined':
@@ -479,7 +618,13 @@
         setStatus('Robot is thinking…', 'blue'); break;
 
       case 'fen':
-        renderBoard(e.fen); break;
+        if (chess) chess.load(e.fen);
+        renderBoard(e.fen);
+        clearSelection();
+        isHumanTurn = e.fen.split(' ')[1] === 'b';
+        document.getElementById('board').classList.toggle('human-turn', isHumanTurn);
+        if (isHumanTurn) setStatus('Your turn — click a piece to move.', 'green');
+        break;
 
       case 'move':
         setStatus(`Robot played: ${e.uci} (move ${e.moveNum})`, 'green');
@@ -488,6 +633,14 @@
       case 'quip':
         addChatBubble(e.text, e.personality);
         speak(e.text, e.personality); break;
+
+      case 'error':
+        setStatus(`Error: ${e.text}`, 'red');
+        addLog(`Error: ${e.text}`);
+        document.getElementById('play-btn').disabled = false;
+        document.getElementById('play-btn').textContent = 'Play';
+        document.getElementById('opp-input').disabled = false;
+        break;
 
       case 'done':
         const resultText = {
@@ -519,6 +672,12 @@
     document.getElementById('chat-empty').style.display = '';
     document.querySelectorAll('.bubble').forEach(b => b.remove());
     hideStatus();
+    chess = null;
+    isHumanTurn = false;
+    currentGameId = null;
+    clearSelection();
+    _resetTTS();
+    document.getElementById('board').classList.remove('human-turn');
     renderBoard(START_FEN);
 
     try {

@@ -1,14 +1,16 @@
 import json
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse, HTMLResponse
 from pydantic import BaseModel
 
 from lichess.player import play_game
+from lichess.api import make_human_move
 
 app = FastAPI()
 
@@ -23,6 +25,11 @@ class PlayRequest(BaseModel):
     personality: str = "Cocky"
 
 
+class MoveRequest(BaseModel):
+    game_id: str
+    uci: str
+
+
 @app.post("/play")
 async def play(req: PlayRequest):
     async def event_stream():
@@ -30,3 +37,15 @@ async def play(req: PlayRequest):
             yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.post("/move")
+async def human_move(req: MoveRequest):
+    token = os.environ.get("LICHESS_HUMAN_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=400, detail="LICHESS_HUMAN_TOKEN not set in .env")
+    try:
+        await make_human_move(req.game_id, req.uci, token)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True}

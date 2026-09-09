@@ -46,7 +46,8 @@ async def challenge_user(username: str) -> dict:
                 "color": "white",
             },
         )
-        res.raise_for_status()
+        if not res.is_success:
+            raise RuntimeError(f"Lichess {res.status_code}: {res.text}")
         return res.json()
 
 
@@ -59,6 +60,17 @@ async def stream_account_events():
             async for line in res.aiter_lines():
                 if line.strip():
                     yield json.loads(line)
+
+
+async def make_human_move(game_id: str, move: str, token: str) -> bool:
+    async with httpx.AsyncClient() as client:
+        res = await client.post(
+            f"{BASE}/api/board/game/{game_id}/move/{move}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        if not res.is_success:
+            raise RuntimeError(f"Lichess {res.status_code}: {res.text}")
+        return True
 
 
 async def resign_game(game_id: str) -> bool:

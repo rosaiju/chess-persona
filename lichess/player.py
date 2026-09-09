@@ -140,7 +140,11 @@ async def play_game(opponent_username: str, personality: str = "Cocky"):
     try:
         # Challenge the opponent
         yield {"type": "challenging", "opponent": opponent_username}
-        result = await challenge_user(opponent_username)
+        try:
+            result = await challenge_user(opponent_username)
+        except Exception as e:
+            yield {"type": "error", "text": str(e)}
+            return
         game_id = (result.get("challenge") or result)["id"]
         yield {
             "type": "waiting",
@@ -170,7 +174,7 @@ async def play_game(opponent_username: str, personality: str = "Cocky"):
             yield {"type": "declined", "opponent": opponent_username}
             return
 
-        yield {"type": "started", "gameId": game_id, "url": f"https://lichess.org/{game_id}"}
+        yield {"type": "started", "gameId": game_id, "url": f"https://lichess.org/{game_id}", "opponent": opponent_username}
 
         # Game start quip
         quip = get_quip(personality, "game_start")
