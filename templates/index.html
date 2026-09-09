@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chess Persona</title>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f0f;
+      color: #e8e8e8;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    header {
+      width: 100%;
+      text-align: center;
+      padding: 32px 16px 20px;
+      border-bottom: 1px solid #1e1e1e;
+    }
+    header h1 { font-size: 2rem; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+    .subtitle { margin-top: 6px; color: #666; font-size: 0.9rem; }
+
+    .main {
+      display: flex;
+      gap: 32px;
+      padding: 28px 24px;
+      width: 100%;
+      max-width: 960px;
+      align-items: flex-start;
+    }
+
+    /* ── LEFT COLUMN: controls + board ── */
+    .left { display: flex; flex-direction: column; gap: 16px; flex: 0 0 380px; }
+
+    /* ── RIGHT COLUMN: chat ── */
+    .right { display: flex; flex-direction: column; gap: 16px; flex: 1; min-width: 0; }
+
+    /* ── Personality selector ── */
+    .persona-label {
+      font-size: 0.75rem; color: #666; text-transform: uppercase;
+      letter-spacing: 0.5px; margin-bottom: 4px;
+    }
+    .persona-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .p-btn {
+      flex: 1;
+      background: #1a1a1a;
+      border: 2px solid #333;
+      border-radius: 8px;
+      padding: 10px 8px;
+      color: #aaa;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .p-btn:hover { border-color: #555; color: #ddd; }
+    .p-btn.active { border-color: #2563eb; color: #fff; background: #172040; }
+
+    /* ── Fields ── */
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+    input {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 10px 12px;
+      color: #e8e8e8;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.15s;
+      width: 100%;
+    }
+    input:focus { border-color: #444; }
+    input:disabled { opacity: 0.4; }
+
+    .btn-primary {
+      background: #2563eb; color: #fff; border: none;
+      border-radius: 8px; padding: 12px 20px;
+      font-size: 0.95rem; font-weight: 600; cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+      width: 100%;
+    }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Status badges ── */
+    .status-badge {
+      border-radius: 8px; padding: 10px 16px; font-size: 0.88rem;
+      display: none; align-items: center; gap: 8px;
+    }
+    .status-badge.blue  { background: #0e2240; color: #93c5fd; display: flex; }
+    .status-badge.green { background: #0a2010; color: #86efac; display: flex; }
+    .status-badge.amber { background: #1a1200; color: #fcd34d; display: flex; }
+    .status-badge.red   { background: #1a0a0a; color: #fca5a5; display: flex; }
+    .status-badge { display: none; }
+
+    .game-link { display: none; align-items: center; gap: 10px; }
+    .game-link a { color: #60a5fa; font-size: 0.85rem; text-decoration: none; }
+    .game-link a:hover { text-decoration: underline; }
+    button.small {
+      background: #1e1e1e; color: #aaa; border: 1px solid #2a2a2a;
+      border-radius: 4px; padding: 4px 10px; font-size: 0.8rem; cursor: pointer;
+    }
+    button.small:hover { background: #252525; }
+
+    /* ── Chess board ── */
+    .board-wrap { display: flex; justify-content: center; }
+    .chess-board {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      width: 100%;
+      max-width: 360px;
+      aspect-ratio: 1;
+      border: 2px solid #333;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .sq {
+      display: flex; align-items: center; justify-content: center;
+      font-size: clamp(1rem, 3.5vw, 2rem); line-height: 1; user-select: none;
+    }
+    .sq.light { background: #f0d9b5; }
+    .sq.dark  { background: #b58863; }
+    .sq .wp { color: #fff; text-shadow: 0 0 3px #000, 0 0 5px #000; }
+    .sq .bp { color: #1a1a1a; text-shadow: 0 0 2px rgba(255,255,255,0.4); }
+
+    /* ── Log ── */
+    .log {
+      background: #111; border: 1px solid #1e1e1e; border-radius: 6px;
+      padding: 10px 12px; font-family: monospace; font-size: 0.75rem;
+      color: #555; max-height: 120px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .log:empty::after { content: 'No events yet.'; color: #333; }
+
+    /* ── Right column: persona header ── */
+    .persona-display {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px;
+      background: #141414; border: 1px solid #222; border-radius: 10px;
+    }
+    .persona-avatar { font-size: 2rem; line-height: 1; }
+    .persona-name { font-size: 1rem; font-weight: 700; color: #fff; }
+    .persona-desc { font-size: 0.78rem; color: #666; margin-top: 2px; }
+
+    /* ── Chat bubble area ── */
+    .chat-area {
+      display: flex; flex-direction: column; gap: 10px;
+      min-height: 280px;
+      padding: 12px;
+      background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 10px;
+      overflow-y: auto;
+      position: relative;
+    }
+    .chat-empty {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: #2a2a2a; font-size: 0.85rem; text-align: center; line-height: 1.5;
+      pointer-events: none;
+    }
+
+    .bubble {
+      display: flex; align-items: flex-start; gap: 10px;
+      animation: bubbleIn 0.3s ease forwards;
+      opacity: 0;
+    }
+    @keyframes bubbleIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .bubble.fading { animation: bubbleOut 0.6s ease forwards; }
+    @keyframes bubbleOut {
+      from { opacity: 1; }
+      to   { opacity: 0; height: 0; margin: 0; padding: 0; overflow: hidden; }
+    }
+    .bubble-avatar { font-size: 1.4rem; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+    .bubble-text {
+      background: #1a1a1a; border: 1px solid #252525; border-radius: 0 10px 10px 10px;
+      padding: 10px 14px; font-size: 0.9rem; color: #ddd; line-height: 1.45;
+      max-width: 100%;
+    }
+    /* Personality color accents */
+    .bubble[data-p="Cocky"]      .bubble-text { border-color: #2563eb44; }
+    .bubble[data-p="Aggressive"] .bubble-text { border-color: #dc262644; }
+    .bubble[data-p="Nervous"]    .bubble-text { border-color: #d9770644; }
+    .bubble[data-p="Friendly"]   .bubble-text { border-color: #16a34a44; }
+
+    /* ── TTS mute toggle ── */
+    .tts-row {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.8rem; color: #555;
+    }
+    .tts-toggle {
+      background: none; border: 1px solid #2a2a2a; border-radius: 4px;
+      color: #666; padding: 4px 10px; cursor: pointer; font-size: 0.78rem;
+    }
+    .tts-toggle:hover { border-color: #444; color: #aaa; }
+    .tts-toggle.muted { background: #1a0a0a; border-color: #4a1a1a; color: #f87171; }
+
+    @media (max-width: 700px) {
+      .main { flex-direction: column; }
+      .left { flex: none; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Chess Persona</h1>
+  <p class="subtitle">A chess-playing robot with attitude. Pick a personality, challenge a friend.</p>
+</header>
+
+<div class="main">
+
+  <!-- ── LEFT: controls + board ── -->
+  <div class="left">
+
+    <div class="field">
+      <div class="persona-label">Personality</div>
+      <div class="persona-row">
+        <button class="p-btn active" data-p="Cocky"      onclick="setPersonality(this)">😎 Cocky</button>
+        <button class="p-btn"        data-p="Aggressive" onclick="setPersonality(this)">⚔️ Aggressive</button>
+        <button class="p-btn"        data-p="Nervous"    onclick="setPersonality(this)">😰 Nervous</button>
+        <button class="p-btn"        data-p="Friendly"   onclick="setPersonality(this)">😊 Friendly</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Opponent Lichess Username</label>
+      <input id="opp-input" placeholder="e.g. rosaiju"
+             onkeydown="if(event.key==='Enter') startGame()" />
+    </div>
+
+    <button class="btn-primary" id="play-btn" onclick="startGame()">Play</button>
+
+    <div class="status-badge" id="status-badge"></div>
+
+    <div class="game-link" id="game-link">
+      <a id="game-link-a" href="#" target="_blank" rel="noreferrer">View on Lichess →</a>
+      <button class="small" onclick="copyUrl()">Copy URL</button>
+    </div>
+
+    <div class="board-wrap">
+      <div class="chess-board" id="board"></div>
+    </div>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <!-- ── RIGHT: persona + chat ── -->
+  <div class="right">
+
+    <div class="persona-display" id="persona-display">
+      <div class="persona-avatar" id="pd-avatar">😎</div>
+      <div>
+        <div class="persona-name" id="pd-name">Cocky</div>
+        <div class="persona-desc" id="pd-desc">Overconfident, loves itself, belittles opponent</div>
+      </div>
+    </div>
+
+    <div class="tts-row">
+      <button class="tts-toggle" id="tts-btn" onclick="toggleTTS()">🔊 Voice On</button>
+      <span>Browser TTS — quips are spoken aloud</span>
+    </div>
+
+    <div class="chat-area" id="chat-area">
+      <div class="chat-empty" id="chat-empty">Quips will appear here once the game starts.</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── Constants ────────────────────────────────────────────────────────────────
+
+  const PERSONAS = {
+    Cocky:      { avatar: '😎', desc: 'Overconfident, loves itself, belittles opponent' },
+    Aggressive: { avatar: '⚔️', desc: 'Intense, threatening, loves taking pieces' },
+    Nervous:    { avatar: '😰', desc: 'Anxious, apologizes, surprised when it wins' },
+    Friendly:   { avatar: '😊', desc: 'Supportive coach, kind even after your blunders' },
+  };
+
+  const TTS_CONFIG = {
+    Cocky:      { rate: 1.15, pitch: 1.2 },
+    Aggressive: { rate: 1.2,  pitch: 0.9 },
+    Nervous:    { rate: 0.85, pitch: 0.85 },
+    Friendly:   { rate: 1.0,  pitch: 1.1 },
+  };
+
+  const PIECES = {
+    K:'♔', Q:'♕', R:'♖', B:'♗', N:'♘', P:'♙',
+    k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟',
+  };
+  const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+  // ── State ────────────────────────────────────────────────────────────────────
+
+  let currentPersonality = 'Cocky';
+  let ttsMuted = false;
+  let gameUrl = '';
+  let bubbleCount = 0;
+
+  // ── Personality selector ─────────────────────────────────────────────────────
+
+  function setPersonality(btn) {
+    document.querySelectorAll('.p-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentPersonality = btn.dataset.p;
+    const info = PERSONAS[currentPersonality];
+    document.getElementById('pd-avatar').textContent = info.avatar;
+    document.getElementById('pd-name').textContent   = currentPersonality;
+    document.getElementById('pd-desc').textContent   = info.desc;
+  }
+
+  // ── TTS ──────────────────────────────────────────────────────────────────────
+
+  function toggleTTS() {
+    ttsMuted = !ttsMuted;
+    const btn = document.getElementById('tts-btn');
+    btn.textContent = ttsMuted ? '🔇 Voice Off' : '🔊 Voice On';
+    btn.classList.toggle('muted', ttsMuted);
+  }
+
+  function speak(text, personality) {
+    if (ttsMuted || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    const cfg = TTS_CONFIG[personality] || { rate: 1.0, pitch: 1.0 };
+    utter.rate  = cfg.rate;
+    utter.pitch = cfg.pitch;
+    window.speechSynthesis.speak(utter);
+  }
+
+  // ── Chat bubbles ─────────────────────────────────────────────────────────────
+
+  const MAX_BUBBLES = 5;
+  const BUBBLE_LIFETIME_MS = 20000;
+
+  function addChatBubble(text, personality) {
+    const area = document.getElementById('chat-area');
+    document.getElementById('chat-empty').style.display = 'none';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.dataset.p = personality;
+    bubble.innerHTML = `
+      <div class="bubble-avatar">${PERSONAS[personality]?.avatar || '🤖'}</div>
+      <div class="bubble-text">${escapeHtml(text)}</div>
+    `;
+    area.appendChild(bubble);
+    area.scrollTop = area.scrollHeight;
+
+    // Remove old bubbles beyond MAX
+    const all = area.querySelectorAll('.bubble');
+    if (all.length > MAX_BUBBLES) {
+      all[0].remove();
+    }
+
+    // Fade out after lifetime
+    setTimeout(() => {
+      bubble.classList.add('fading');
+      setTimeout(() => {
+        if (bubble.parentNode) bubble.remove();
+        if (area.querySelectorAll('.bubble').length === 0) {
+          document.getElementById('chat-empty').style.display = '';
+        }
+      }, 600);
+    }, BUBBLE_LIFETIME_MS);
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Chess board ──────────────────────────────────────────────────────────────
+
+  function renderBoard(fen) {
+    const el = document.getElementById('board');
+    const placement = (fen || START_FEN).split(' ')[0];
+    const ranks = placement.split('/');
+    el.innerHTML = '';
+    for (let r = 0; r < 8; r++) {
+      let file = 0;
+      for (const ch of ranks[r]) {
+        if (ch >= '1' && ch <= '8') {
+          for (let i = 0; i < parseInt(ch); i++) {
+            el.appendChild(makeSquare(r, file, null)); file++;
+          }
+        } else {
+          el.appendChild(makeSquare(r, file, ch)); file++;
+        }
+      }
+    }
+  }
+
+  function makeSquare(rank, file, piece) {
+    const sq = document.createElement('div');
+    sq.className = 'sq ' + ((rank + file) % 2 === 0 ? 'light' : 'dark');
+    if (piece) {
+      const span = document.createElement('span');
+      span.className = piece === piece.toUpperCase() ? 'wp' : 'bp';
+      span.textContent = PIECES[piece] || '';
+      sq.appendChild(span);
+    }
+    return sq;
+  }
+
+  renderBoard(START_FEN);
+
+  // ── Status helper ─────────────────────────────────────────────────────────────
+
+  function setStatus(text, color) {
+    const el = document.getElementById('status-badge');
+    el.textContent = text;
+    el.className = 'status-badge ' + color;
+    el.style.display = 'flex';
+  }
+
+  function hideStatus() {
+    document.getElementById('status-badge').style.display = 'none';
+  }
+
+  // ── Log ──────────────────────────────────────────────────────────────────────
+
+  function addLog(line) {
+    const el = document.getElementById('log');
+    const d = document.createElement('div');
+    d.textContent = line;
+    el.appendChild(d);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  // ── Game link ─────────────────────────────────────────────────────────────────
+
+  function setGameLink(url) {
+    gameUrl = url;
+    document.getElementById('game-link').style.display = 'flex';
+    document.getElementById('game-link-a').href = url;
+  }
+
+  async function copyUrl() {
+    await navigator.clipboard.writeText(gameUrl);
+  }
+
+  // ── Main event handler ───────────────────────────────────────────────────────
+
+  function handleEvent(e) {
+    switch (e.type) {
+      case 'challenging':
+        setStatus(`Challenging ${e.opponent}…`, 'blue'); break;
+
+      case 'waiting':
+        setStatus(`Waiting for ${e.opponent} to accept…`, 'blue');
+        setGameLink(e.url);
+        addLog(`Challenge sent → ${e.url}`); break;
+
+      case 'started':
+        setStatus(`Game started! Playing as White.`, 'green');
+        addLog(`${e.opponent} accepted. Game: ${e.url}`); break;
+
+      case 'declined':
+        setStatus(`Challenge declined by ${e.opponent}.`, 'red');
+        addLog('Challenge declined.'); break;
+
+      case 'timeout':
+        setStatus('Challenge timed out.', 'amber');
+        addLog('Challenge timed out.'); break;
+
+      case 'thinking':
+        setStatus('Robot is thinking…', 'blue'); break;
+
+      case 'fen':
+        renderBoard(e.fen); break;
+
+      case 'move':
+        setStatus(`Robot played: ${e.uci} (move ${e.moveNum})`, 'green');
+        addLog(`White: ${e.uci} (move ${e.moveNum})`); break;
+
+      case 'quip':
+        addChatBubble(e.text, e.personality);
+        speak(e.text, e.personality); break;
+
+      case 'done':
+        const resultText = {
+          '1-0': '✓ Robot wins!',
+          '0-1': '✓ You win!',
+          '1/2-1/2': '½ Draw',
+        }[e.result] || `Game over (${e.status})`;
+        setStatus(resultText, e.result === '1-0' ? 'amber' : 'green');
+        addLog(`Game over: ${e.result || e.status}`);
+        if (e.url) setGameLink(e.url);
+        document.getElementById('play-btn').disabled = false;
+        document.getElementById('play-btn').textContent = 'Play Again';
+        document.getElementById('opp-input').disabled = false;
+        break;
+    }
+  }
+
+  // ── Start game ────────────────────────────────────────────────────────────────
+
+  async function startGame() {
+    const opponent = document.getElementById('opp-input').value.trim();
+    if (!opponent) { document.getElementById('opp-input').focus(); return; }
+
+    document.getElementById('play-btn').disabled = true;
+    document.getElementById('play-btn').textContent = 'Connecting…';
+    document.getElementById('opp-input').disabled = true;
+    document.getElementById('log').innerHTML = '';
+    document.getElementById('game-link').style.display = 'none';
+    document.getElementById('chat-empty').style.display = '';
+    document.querySelectorAll('.bubble').forEach(b => b.remove());
+    hideStatus();
+    renderBoard(START_FEN);
+
+    try {
+      const res = await fetch('/play', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ opponent, personality: currentPersonality }),
+      });
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n'); buf = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try { handleEvent(JSON.parse(line.slice(6))); } catch {}
+        }
+      }
+    } catch (err) {
+      setStatus(`Error: ${err.message}`, 'red');
+      addLog(`Error: ${err.message}`);
+      document.getElementById('play-btn').disabled = false;
+      document.getElementById('play-btn').textContent = 'Play';
+      document.getElementById('opp-input').disabled = false;
+    }
+  }
+</script>
+</body>
+</html>
