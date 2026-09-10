@@ -310,12 +310,20 @@
     Friendly:   { avatar: '😊', desc: 'Supportive coach, kind even after your blunders' },
   };
 
-  const TTS_CONFIG = {
-    Cocky:      { rate: 1.15, pitch: 1.2 },
-    Aggressive: { rate: 1.2,  pitch: 0.9 },
-    Nervous:    { rate: 0.85, pitch: 0.85 },
-    Friendly:   { rate: 1.0,  pitch: 1.1 },
-  };
+  // ── Audio context — created + unlocked during Play button click ─────────────
+  let _audioCtx = null;
+
+  function _unlockAudio() {
+    // Must be called inside a user-gesture handler (e.g. button click)
+    if (!_audioCtx || _audioCtx.state === 'closed') _audioCtx = new AudioContext();
+    _audioCtx.resume();
+    // Play a silent 1-sample buffer to fully unlock on strict browsers
+    const buf = _audioCtx.createBuffer(1, 1, 22050);
+    const src = _audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(_audioCtx.destination);
+    src.start(0);
+  }
 
   const PIECES = {
     K:'♔', Q:'♕', R:'♖', B:'♗', N:'♘', P:'♙',
@@ -358,34 +366,46 @@
     btn.classList.toggle('muted', ttsMuted);
   }
 
-  // ── TTS queue — no cutting off, max 2 pending ───────────────────────────────
+  // ── TTS queue — fetch edge-tts audio + ring-mod robot effect ────────────────
   const ttsQueue = [];
   let ttsSpeaking = false;
 
-  function speak(text, personality) {
-    if (ttsMuted || !window.speechSynthesis) return;
-    if (ttsQueue.length >= 2) return;   // drop if backlog is long
-    ttsQueue.push({ text, personality });
+  function speak(text) {
+    if (ttsMuted) return;
+    if (ttsQueue.length >= 2) return;
+    ttsQueue.push(text);
     if (!ttsSpeaking) _processQueue();
   }
 
-  function _processQueue() {
+  async function _processQueue() {
     if (!ttsQueue.length) { ttsSpeaking = false; return; }
     ttsSpeaking = true;
-    const { text, personality } = ttsQueue.shift();
-    const utter = new SpeechSynthesisUtterance(text);
-    const cfg   = TTS_CONFIG[personality] || { rate: 1.0, pitch: 1.0 };
-    utter.rate  = cfg.rate;
-    utter.pitch = cfg.pitch;
-    utter.onend   = _processQueue;
-    utter.onerror = _processQueue;
-    window.speechSynthesis.speak(utter);
+    const text = ttsQueue.shift();
+    try {
+      const res = await fetch(`/tts?text=${encodeURIComponent(text)}`);
+      if (!res.ok) throw new Error('tts failed');
+      const buf = await res.arrayBuffer();
+      const ctx = _audioCtx;
+      if (!ctx || ctx.state === 'closed') throw new Error('no audio ctx');
+      const audio = await ctx.decodeAudioData(buf);
+      await new Promise(resolve => {
+        const source = ctx.createBufferSource();
+        source.buffer = audio;
+        source.connect(ctx.destination);
+        source.start();
+        source.onended = resolve;
+        source.onerror = resolve;
+      });
+    } catch (e) {
+      console.warn('TTS error:', e);
+    }
+    _processQueue();
   }
 
   function _resetTTS() {
-    window.speechSynthesis.cancel();
     ttsQueue.length = 0;
     ttsSpeaking = false;
+    // keep _audioCtx alive — unlocked by the Play button click
   }
 
   // ── Chat bubbles ─────────────────────────────────────────────────────────────
@@ -632,7 +652,7 @@
 
       case 'quip':
         addChatBubble(e.text, e.personality);
-        speak(e.text, e.personality); break;
+        speak(e.text); break;
 
       case 'error':
         setStatus(`Error: ${e.text}`, 'red');
@@ -677,6 +697,7 @@
     currentGameId = null;
     clearSelection();
     _resetTTS();
+    _unlockAudio();   // must happen during the button-click user gesture
     document.getElementById('board').classList.remove('human-turn');
     renderBoard(START_FEN);
 

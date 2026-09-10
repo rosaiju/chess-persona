@@ -5,8 +5,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
+import edge_tts
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.responses import StreamingResponse, HTMLResponse, Response
 from pydantic import BaseModel
 
 from lichess.player import play_game
@@ -28,6 +29,16 @@ class PlayRequest(BaseModel):
 class MoveRequest(BaseModel):
     game_id: str
     uci: str
+
+
+@app.get("/tts")
+async def tts(text: str):
+    communicate = edge_tts.Communicate(text, voice="en-US-JennyNeural", rate="-3%")
+    audio = b""
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            audio += chunk["data"]
+    return Response(content=audio, media_type="audio/mpeg")
 
 
 @app.post("/play")
