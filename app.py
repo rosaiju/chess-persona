@@ -31,9 +31,19 @@ class MoveRequest(BaseModel):
     uci: str
 
 
+VOICE_CONFIG = {
+    "Cocky":      {"voice": "en-US-AriaNeural",  "rate": "+20%", "pitch": "+0Hz"},
+    "Aggressive": {"voice": "en-US-AvaNeural",   "rate": "+30%", "pitch": "+12Hz"},
+    "Nervous":    {"voice": "en-US-JennyNeural", "rate": "-20%", "pitch": "-5Hz"},
+    "Friendly":   {"voice": "en-US-EmmaNeural",  "rate": "+8%",  "pitch": "+5Hz"},
+}
+
 @app.get("/tts")
-async def tts(text: str):
-    communicate = edge_tts.Communicate(text, voice="en-US-AriaNeural", rate="+20%")
+async def tts(text: str, personality: str = "Cocky"):
+    cfg = VOICE_CONFIG.get(personality, VOICE_CONFIG["Cocky"])
+    communicate = edge_tts.Communicate(
+        text, voice=cfg["voice"], rate=cfg["rate"], pitch=cfg["pitch"]
+    )
     audio = b""
     async for chunk in communicate.stream():
         if chunk["type"] == "audio":

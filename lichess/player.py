@@ -1,4 +1,5 @@
 import asyncio
+import random
 import shutil
 import chess
 import chess.engine
@@ -97,7 +98,10 @@ def _classify_trigger(
                 return "robot_winning"
             if total_moves >= 30:
                 return "endgame"
-        return "robot_move"
+        # Only quip on ~45% of plain moves (skip opening, reduce chatter)
+        if total_moves > 6 and random.random() < 0.45:
+            return "robot_move"
+        return None
     else:
         # Human's move
         if gives_check:
@@ -106,7 +110,7 @@ def _classify_trigger(
             delta = eval_after - eval_before  # positive = White improved = human blundered
             if delta > 200:
                 return "human_blunders"
-            if delta > 50:
+            if delta > 80:   # raised from 50 — only react to real mistakes
                 return "human_mistake"
             if delta < -100:
                 return "human_good_move"

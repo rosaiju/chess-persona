@@ -97,6 +97,14 @@
     .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
     .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    .btn-rematch {
+      background: #1a1a1a; color: #aaa; border: 1px solid #333;
+      border-radius: 8px; padding: 10px 20px;
+      font-size: 0.88rem; font-weight: 600; cursor: pointer;
+      transition: all 0.15s; width: 100%;
+    }
+    .btn-rematch:hover { border-color: #555; color: #fff; }
+
     /* ── Status badges ── */
     .status-badge {
       border-radius: 8px; padding: 10px 16px; font-size: 0.88rem;
@@ -262,6 +270,7 @@
     </div>
 
     <button class="btn-primary" id="play-btn" onclick="startGame()">Play</button>
+    <button class="btn-rematch" id="rematch-btn" onclick="rematch()" style="display:none">↩ Rematch</button>
 
     <div class="status-badge" id="status-badge"></div>
 
@@ -337,6 +346,7 @@
   let ttsMuted = false;
   let gameUrl = '';
   let bubbleCount = 0;
+  let lastOpponent = '';
 
   // ── Board interaction state ──────────────────────────────────────────────────
   let chess       = null;   // chess.js instance
@@ -382,7 +392,7 @@
     ttsSpeaking = true;
     const text = ttsQueue.shift();
     try {
-      const res = await fetch(`/tts?text=${encodeURIComponent(text)}`);
+      const res = await fetch(`/tts?text=${encodeURIComponent(text)}&personality=${encodeURIComponent(currentPersonality)}`);
       if (!res.ok) throw new Error('tts failed');
       const buf = await res.arrayBuffer();
       const ctx = _audioCtx;
@@ -622,6 +632,7 @@
 
       case 'started':
         currentGameId = e.gameId;
+        lastOpponent = e.opponent;
         chess = new Chess();
         setStatus(`Game started! You are Black — click your pieces to move.`, 'green');
         addLog(`${e.opponent} accepted. Game: ${e.url}`); break;
@@ -674,11 +685,17 @@
         document.getElementById('play-btn').disabled = false;
         document.getElementById('play-btn').textContent = 'Play Again';
         document.getElementById('opp-input').disabled = false;
+        if (lastOpponent) document.getElementById('rematch-btn').style.display = '';
         break;
     }
   }
 
   // ── Start game ────────────────────────────────────────────────────────────────
+
+  function rematch() {
+    document.getElementById('opp-input').value = lastOpponent;
+    startGame();
+  }
 
   async function startGame() {
     const opponent = document.getElementById('opp-input').value.trim();
@@ -687,6 +704,7 @@
     document.getElementById('play-btn').disabled = true;
     document.getElementById('play-btn').textContent = 'Connecting…';
     document.getElementById('opp-input').disabled = true;
+    document.getElementById('rematch-btn').style.display = 'none';
     document.getElementById('log').innerHTML = '';
     document.getElementById('game-link').style.display = 'none';
     document.getElementById('chat-empty').style.display = '';
