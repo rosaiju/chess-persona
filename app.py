@@ -33,7 +33,7 @@ class MoveRequest(BaseModel):
 
 @app.get("/tts")
 async def tts(text: str):
-    communicate = edge_tts.Communicate(text, voice="en-US-JennyNeural", rate="-3%")
+    communicate = edge_tts.Communicate(text, voice="en-US-AriaNeural", rate="+20%")
     audio = b""
     async for chunk in communicate.stream():
         if chunk["type"] == "audio":
