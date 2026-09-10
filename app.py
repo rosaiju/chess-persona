@@ -1,6 +1,9 @@
+import asyncio
 import json
 import os
 from pathlib import Path
+from asyncio import Queue
+from typing import Set
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -15,10 +18,47 @@ from lichess.api import make_human_move
 
 app = FastAPI()
 
+# ── External event broadcast (for SenseRobot client) ─────────────────────────
+_subscribers: Set[Queue] = set()
+
+def _broadcast(event: dict):
+    dead = set()
+    for q in _subscribers:
+        try:
+            q.put_nowait(event)
+        except Exception:
+            dead.add(q)
+    _subscribers.difference_update(dead)
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return Path("templates/index.html").read_text(encoding="utf-8")
+
+
+@app.get("/events")
+async def events():
+    """SSE stream for external subscribers (e.g. SenseRobot client)."""
+    q: Queue = Queue()
+    _subscribers.add(q)
+
+    async def stream():
+        try:
+            while True:
+                event = await q.get()
+                yield f"data: {json.dumps(event)}\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            _subscribers.discard(q)
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 class PlayRequest(BaseModel):
@@ -38,6 +78,7 @@ VOICE_CONFIG = {
     "Friendly":   {"voice": "en-US-EmmaNeural",  "rate": "+8%",  "pitch": "+5Hz"},
 }
 
+
 @app.get("/tts")
 async def tts(text: str, personality: str = "Cocky"):
     cfg = VOICE_CONFIG.get(personality, VOICE_CONFIG["Cocky"])
@@ -56,6 +97,9 @@ async def play(req: PlayRequest):
     async def event_stream():
         async for event in play_game(req.opponent.strip(), req.personality):
             yield f"data: {json.dumps(event)}\n\n"
+            # Broadcast selected events to external subscribers (SenseRobot)
+            if event.get("type") in ("quip", "started", "fen", "done"):
+                _broadcast(event)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

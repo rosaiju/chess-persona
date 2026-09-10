@@ -105,6 +105,15 @@
     }
     .btn-rematch:hover { border-color: #555; color: #fff; }
 
+    .sense-row { display: flex; }
+    .sense-btn {
+      flex: 1; background: #111; border: 1px solid #2a2a2a; border-radius: 6px;
+      padding: 8px 12px; color: #555; font-size: 0.8rem; font-weight: 600;
+      cursor: pointer; transition: all 0.15s; text-align: left;
+    }
+    .sense-btn:hover { border-color: #444; color: #aaa; }
+    .sense-btn.active { background: #0a1a2a; border-color: #2563eb; color: #60a5fa; }
+
     /* ── Status badges ── */
     .status-badge {
       border-radius: 8px; padding: 10px 16px; font-size: 0.88rem;
@@ -269,6 +278,12 @@
              onkeydown="if(event.key==='Enter') startGame()" />
     </div>
 
+    <div class="sense-row">
+      <button class="sense-btn" id="sense-btn" onclick="toggleSenseRobot()">
+        🤖 SenseRobot Mode: OFF
+      </button>
+    </div>
+
     <button class="btn-primary" id="play-btn" onclick="startGame()">Play</button>
     <button class="btn-rematch" id="rematch-btn" onclick="rematch()" style="display:none">↩ Rematch</button>
 
@@ -347,6 +362,14 @@
   let gameUrl = '';
   let bubbleCount = 0;
   let lastOpponent = '';
+  let senseRobotMode = false;
+
+  function toggleSenseRobot() {
+    senseRobotMode = !senseRobotMode;
+    const btn = document.getElementById('sense-btn');
+    btn.textContent = `🤖 SenseRobot Mode: ${senseRobotMode ? 'ON' : 'OFF'}`;
+    btn.classList.toggle('active', senseRobotMode);
+  }
 
   // ── Board interaction state ──────────────────────────────────────────────────
   let chess       = null;   // chess.js instance
@@ -652,9 +675,11 @@
         if (chess) chess.load(e.fen);
         renderBoard(e.fen);
         clearSelection();
-        isHumanTurn = e.fen.split(' ')[1] === 'b';
+        isHumanTurn = !senseRobotMode && e.fen.split(' ')[1] === 'b';
         document.getElementById('board').classList.toggle('human-turn', isHumanTurn);
-        if (isHumanTurn) setStatus('Your turn — click a piece to move.', 'green');
+        if (e.fen.split(' ')[1] === 'b') {
+          setStatus(senseRobotMode ? 'SenseRobot is thinking…' : 'Your turn — click a piece to move.', 'green');
+        }
         break;
 
       case 'move':
