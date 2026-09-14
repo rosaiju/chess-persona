@@ -273,6 +273,14 @@
     </div>
 
     <div class="field">
+      <div class="persona-label">Robot plays as</div>
+      <div class="persona-row">
+        <button class="p-btn color-btn active" data-color="white" onclick="setRobotColor(this)">♙ Robot: White</button>
+        <button class="p-btn color-btn"        data-color="black" onclick="setRobotColor(this)">♟ Robot: Black</button>
+      </div>
+    </div>
+
+    <div class="field">
       <label>Opponent Lichess Username</label>
       <input id="opp-input" placeholder="e.g. rosaiju"
              onkeydown="if(event.key==='Enter') startGame()" />
@@ -358,11 +366,19 @@
   // ── State ────────────────────────────────────────────────────────────────────
 
   let currentPersonality = 'Cocky';
+  let robotColor = 'white';
   let ttsMuted = false;
   let gameUrl = '';
   let bubbleCount = 0;
   let lastOpponent = '';
   let senseRobotMode = false;
+
+  function setRobotColor(btn) {
+    document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    robotColor = btn.dataset.color;
+    renderBoard(chess ? chess.fen() : START_FEN, robotColor === 'white');
+  }
 
   function toggleSenseRobot() {
     senseRobotMode = !senseRobotMode;
@@ -497,23 +513,37 @@
     return out;
   }
 
-  // Board rendered from Black's perspective: rank 1 at top, file h on left
-  // ranks[0]=rank8 ... ranks[7]=rank1 in FEN
-  function renderBoard(fen) {
+  // Render board from the given perspective.
+  // blackPerspective=true : rank 1 at top, file h on left  (human sits as Black)
+  // blackPerspective=false: rank 8 at top, file a on left  (human sits as White)
+  function renderBoard(fen, blackPerspective = true) {
     const el = document.getElementById('board');
     const placement = (fen || START_FEN).split(' ')[0];
     const ranks = placement.split('/');
     el.innerHTML = '';
 
     for (let displayRow = 0; displayRow < 8; displayRow++) {
-      // displayRow 0 = rank 1 (bottom of White's board, top of ours)
-      const fenIdx  = 7 - displayRow;      // ranks[7]=rank1, ranks[0]=rank8
-      const rankNum = displayRow + 1;      // 1 at display top, 8 at display bottom
-      const pieces  = expandRank(ranks[fenIdx]);
+      let fenIdx, rankNum;
+      if (blackPerspective) {
+        // rank 1 at top: displayRow 0 → rank1 → FEN index 7
+        fenIdx  = 7 - displayRow;
+        rankNum = displayRow + 1;
+      } else {
+        // rank 8 at top: displayRow 0 → rank8 → FEN index 0
+        fenIdx  = displayRow;
+        rankNum = 8 - displayRow;
+      }
+      const pieces = expandRank(ranks[fenIdx]);
 
       for (let displayCol = 0; displayCol < 8; displayCol++) {
-        // displayCol 0 = file h, displayCol 7 = file a
-        const fileIdx  = 7 - displayCol;
+        let fileIdx;
+        if (blackPerspective) {
+          // file h on left: displayCol 0 → file h (index 7)
+          fileIdx = 7 - displayCol;
+        } else {
+          // file a on left: displayCol 0 → file a (index 0)
+          fileIdx = displayCol;
+        }
         const fileChar = String.fromCharCode(97 + fileIdx);
         const squareId = fileChar + rankNum;
         const isLight  = (displayRow + displayCol) % 2 === 0;
@@ -537,7 +567,7 @@
     return sq;
   }
 
-  renderBoard(START_FEN);
+  renderBoard(START_FEN, robotColor === 'white');
 
   // ── Board click logic ────────────────────────────────────────────────────────
 
@@ -562,8 +592,9 @@
       clearSelection();
     }
 
-    // Select a Black piece
-    if (piece && piece.color === 'b') {
+    // Select the human's piece
+    const humanPieceColor = robotColor === 'white' ? 'b' : 'w';
+    if (piece && piece.color === humanPieceColor) {
       selectedSq  = sq;
       legalDests  = chess.moves({ square: sq, verbose: true }).map(m => m.to);
       highlightSquares();
@@ -656,8 +687,11 @@
       case 'started':
         currentGameId = e.gameId;
         lastOpponent = e.opponent;
+        robotColor = e.color || robotColor;
         chess = new Chess();
-        setStatus(`Game started! You are Black — click your pieces to move.`, 'green');
+        renderBoard(START_FEN, robotColor === 'white');
+        { const humanSide = robotColor === 'white' ? 'Black' : 'White';
+          setStatus(`Game started! You are ${humanSide} — click your pieces to move.`, 'green'); }
         addLog(`${e.opponent} accepted. Game: ${e.url}`); break;
 
       case 'declined':
@@ -673,18 +707,22 @@
 
       case 'fen':
         if (chess) chess.load(e.fen);
-        renderBoard(e.fen);
+        renderBoard(e.fen, robotColor === 'white');
         clearSelection();
-        isHumanTurn = !senseRobotMode && e.fen.split(' ')[1] === 'b';
-        document.getElementById('board').classList.toggle('human-turn', isHumanTurn);
-        if (e.fen.split(' ')[1] === 'b') {
-          setStatus(senseRobotMode ? 'SenseRobot is thinking…' : 'Your turn — click a piece to move.', 'green');
+        { const humanColor = robotColor === 'white' ? 'b' : 'w';
+          isHumanTurn = !senseRobotMode && e.fen.split(' ')[1] === humanColor;
+          document.getElementById('board').classList.toggle('human-turn', isHumanTurn);
+          if (e.fen.split(' ')[1] === humanColor) {
+            setStatus(senseRobotMode ? 'SenseRobot is thinking…' : 'Your turn — click a piece to move.', 'green');
+          }
         }
         break;
 
       case 'move':
         setStatus(`Robot played: ${e.uci} (move ${e.moveNum})`, 'green');
-        addLog(`White: ${e.uci} (move ${e.moveNum})`); break;
+        { const colorLabel = robotColor === 'white' ? 'White' : 'Black';
+          addLog(`${colorLabel}: ${e.uci} (move ${e.moveNum})`); }
+        break;
 
       case 'quip':
         addChatBubble(e.text, e.personality);
@@ -742,13 +780,13 @@
     _resetTTS();
     _unlockAudio();   // must happen during the button-click user gesture
     document.getElementById('board').classList.remove('human-turn');
-    renderBoard(START_FEN);
+    renderBoard(START_FEN, robotColor === 'white');
 
     try {
       const res = await fetch('/play', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ opponent, personality: currentPersonality }),
+        body: JSON.stringify({ opponent, personality: currentPersonality, color: robotColor }),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
 

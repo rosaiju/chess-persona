@@ -132,20 +132,20 @@ def _game_over_trigger(board: chess.Board) -> str:
 
 # ─── Main entry point ─────────────────────────────────────────────────────────
 
-async def play_game(opponent_username: str, personality: str = "Cocky"):
+async def play_game(opponent_username: str, personality: str = "Cocky", color: str = "white"):
     """
     Async generator that yields SSE-ready event dicts.
-    Robot plays as White (best Stockfish moves).
-    Human plays as Black on Lichess.
+    Robot plays as the requested color (best Stockfish moves).
     Quip events are emitted after every move.
     """
+    robot_side = chess.WHITE if color == "white" else chess.BLACK
     engine = await _open_engine()
 
     try:
         # Challenge the opponent
         yield {"type": "challenging", "opponent": opponent_username}
         try:
-            result = await challenge_user(opponent_username)
+            result = await challenge_user(opponent_username, color)
         except Exception as e:
             yield {"type": "error", "text": str(e)}
             return
@@ -178,7 +178,7 @@ async def play_game(opponent_username: str, personality: str = "Cocky"):
             yield {"type": "declined", "opponent": opponent_username}
             return
 
-        yield {"type": "started", "gameId": game_id, "url": f"https://lichess.org/{game_id}", "opponent": opponent_username}
+        yield {"type": "started", "gameId": game_id, "url": f"https://lichess.org/{game_id}", "opponent": opponent_username, "color": color}
 
         # Game start quip
         quip = get_quip(personality, "game_start")
@@ -223,14 +223,15 @@ async def play_game(opponent_username: str, personality: str = "Cocky"):
             for uci in new_moves:
                 move = chess.Move.from_uci(uci)
                 board_before = board.copy()
-                is_robot_move = (board.turn == chess.WHITE)
+                is_robot_move = (board.turn == robot_side)
 
                 eval_before = prev_eval
                 board.push(move)
                 total_moves += 1
                 seen_move_count += 1
 
-                eval_after = await _eval_position(engine, board)
+                raw = await _eval_position(engine, board)
+                eval_after = raw if robot_side == chess.WHITE else (-raw if raw is not None else None)
                 yield {"type": "fen", "fen": board.fen()}
 
                 trigger = _classify_trigger(
@@ -250,8 +251,8 @@ async def play_game(opponent_username: str, personality: str = "Cocky"):
 
                 prev_eval = eval_after
 
-            # If it's now White's turn and game is still going, play best move
-            if board.turn == chess.WHITE and not board.is_game_over():
+            # If it's now the robot's turn and game is still going, play best move
+            if board.turn == robot_side and not board.is_game_over():
                 yield {"type": "thinking"}
                 move = await _best_move(engine, board)
                 if not move:
@@ -267,7 +268,8 @@ async def play_game(opponent_username: str, personality: str = "Cocky"):
                 total_moves += 1
                 seen_move_count += 1
 
-                eval_after = await _eval_position(engine, board)
+                raw = await _eval_position(engine, board)
+                eval_after = raw if robot_side == chess.WHITE else (-raw if raw is not None else None)
                 yield {"type": "fen", "fen": board.fen(), "move": board.san(move) if False else move.uci()}
 
                 trigger = _classify_trigger(

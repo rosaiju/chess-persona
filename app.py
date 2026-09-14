@@ -64,6 +64,7 @@ async def events():
 class PlayRequest(BaseModel):
     opponent: str
     personality: str = "Cocky"
+    color: str = "white"   # robot's Lichess color
 
 
 class MoveRequest(BaseModel):
@@ -95,7 +96,7 @@ async def tts(text: str, personality: str = "Cocky"):
 @app.post("/play")
 async def play(req: PlayRequest):
     async def event_stream():
-        async for event in play_game(req.opponent.strip(), req.personality):
+        async for event in play_game(req.opponent.strip(), req.personality, req.color):
             yield f"data: {json.dumps(event)}\n\n"
             # Broadcast selected events to external subscribers (SenseRobot)
             if event.get("type") in ("quip", "started", "fen", "done"):

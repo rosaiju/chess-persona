@@ -34,7 +34,7 @@ async def stream_game(game_id: str):
                     yield json.loads(line)
 
 
-async def challenge_user(username: str) -> dict:
+async def challenge_user(username: str, color: str = "white") -> dict:
     async with httpx.AsyncClient() as client:
         res = await client.post(
             f"{BASE}/api/challenge/{username}",
@@ -43,7 +43,7 @@ async def challenge_user(username: str) -> dict:
                 "rated": "false",
                 "clock.limit": 900,
                 "clock.increment": 10,
-                "color": "white",
+                "color": color,
             },
         )
         if not res.is_success:
