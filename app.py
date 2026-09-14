@@ -64,7 +64,7 @@ async def events():
 class PlayRequest(BaseModel):
     opponent: str
     personality: str = "Cocky"
-    color: str = "white"   # robot's Lichess color
+    color: str = "black"   # robot (Sainju) is always Black — hardware constraint
 
 
 class MoveRequest(BaseModel):

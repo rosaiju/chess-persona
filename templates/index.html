@@ -273,14 +273,6 @@
     </div>
 
     <div class="field">
-      <div class="persona-label">Robot plays as</div>
-      <div class="persona-row">
-        <button class="p-btn color-btn active" data-color="white" onclick="setRobotColor(this)">♙ Robot: White</button>
-        <button class="p-btn color-btn"        data-color="black" onclick="setRobotColor(this)">♟ Robot: Black</button>
-      </div>
-    </div>
-
-    <div class="field">
       <label>Opponent Lichess Username</label>
       <input id="opp-input" placeholder="e.g. rosaiju"
              onkeydown="if(event.key==='Enter') startGame()" />
@@ -366,19 +358,11 @@
   // ── State ────────────────────────────────────────────────────────────────────
 
   let currentPersonality = 'Cocky';
-  let robotColor = 'white';
   let ttsMuted = false;
   let gameUrl = '';
   let bubbleCount = 0;
   let lastOpponent = '';
   let senseRobotMode = false;
-
-  function setRobotColor(btn) {
-    document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    robotColor = btn.dataset.color;
-    renderBoard(chess ? chess.fen() : START_FEN, robotColor === 'white');
-  }
 
   function toggleSenseRobot() {
     senseRobotMode = !senseRobotMode;
@@ -567,7 +551,7 @@
     return sq;
   }
 
-  renderBoard(START_FEN, robotColor === 'white');
+  renderBoard(START_FEN, false);
 
   // ── Board click logic ────────────────────────────────────────────────────────
 
@@ -592,9 +576,8 @@
       clearSelection();
     }
 
-    // Select the human's piece
-    const humanPieceColor = robotColor === 'white' ? 'b' : 'w';
-    if (piece && piece.color === humanPieceColor) {
+    // Select the human's piece (human is always White)
+    if (piece && piece.color === 'w') {
       selectedSq  = sq;
       legalDests  = chess.moves({ square: sq, verbose: true }).map(m => m.to);
       highlightSquares();
@@ -687,11 +670,9 @@
       case 'started':
         currentGameId = e.gameId;
         lastOpponent = e.opponent;
-        robotColor = e.color || robotColor;
         chess = new Chess();
-        renderBoard(START_FEN, robotColor === 'white');
-        { const humanSide = robotColor === 'white' ? 'Black' : 'White';
-          setStatus(`Game started! You are ${humanSide} — click your pieces to move.`, 'green'); }
+        renderBoard(START_FEN, false);
+        setStatus(`Game started! You are White — click your pieces to move.`, 'green');
         addLog(`${e.opponent} accepted. Game: ${e.url}`); break;
 
       case 'declined':
@@ -707,21 +688,18 @@
 
       case 'fen':
         if (chess) chess.load(e.fen);
-        renderBoard(e.fen, robotColor === 'white');
+        renderBoard(e.fen, false);
         clearSelection();
-        { const humanColor = robotColor === 'white' ? 'b' : 'w';
-          isHumanTurn = !senseRobotMode && e.fen.split(' ')[1] === humanColor;
-          document.getElementById('board').classList.toggle('human-turn', isHumanTurn);
-          if (e.fen.split(' ')[1] === humanColor) {
-            setStatus(senseRobotMode ? 'SenseRobot is thinking…' : 'Your turn — click a piece to move.', 'green');
-          }
+        isHumanTurn = !senseRobotMode && e.fen.split(' ')[1] === 'w';
+        document.getElementById('board').classList.toggle('human-turn', isHumanTurn);
+        if (e.fen.split(' ')[1] === 'w') {
+          setStatus(senseRobotMode ? 'SenseRobot is thinking…' : 'Your turn — click a piece to move.', 'green');
         }
         break;
 
       case 'move':
         setStatus(`Robot played: ${e.uci} (move ${e.moveNum})`, 'green');
-        { const colorLabel = robotColor === 'white' ? 'White' : 'Black';
-          addLog(`${colorLabel}: ${e.uci} (move ${e.moveNum})`); }
+        addLog(`Black: ${e.uci} (move ${e.moveNum})`);
         break;
 
       case 'quip':
@@ -780,13 +758,13 @@
     _resetTTS();
     _unlockAudio();   // must happen during the button-click user gesture
     document.getElementById('board').classList.remove('human-turn');
-    renderBoard(START_FEN, robotColor === 'white');
+    renderBoard(START_FEN, false);
 
     try {
       const res = await fetch('/play', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ opponent, personality: currentPersonality, color: robotColor }),
+        body: JSON.stringify({ opponent, personality: currentPersonality }),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
 

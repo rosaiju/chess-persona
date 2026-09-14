@@ -132,7 +132,7 @@ def _game_over_trigger(board: chess.Board) -> str:
 
 # ─── Main entry point ─────────────────────────────────────────────────────────
 
-async def play_game(opponent_username: str, personality: str = "Cocky", color: str = "white"):
+async def play_game(opponent_username: str, personality: str = "Cocky", color: str = "black"):
     """
     Async generator that yields SSE-ready event dicts.
     Robot plays as the requested color (best Stockfish moves).
