@@ -1,8 +1,11 @@
 import asyncio
+import logging
 import random
 import shutil
 import chess
 import chess.engine
+
+log = logging.getLogger(__name__)
 
 from lichess.api import (
     make_move,
@@ -198,12 +201,10 @@ async def play_game(opponent_username: str, personality: str = "Cocky", color: s
             # On gameFull, lock in robot_side from what Lichess actually assigned
             if event["type"] == "gameFull":
                 white_id = event.get("white", {}).get("id", "").lower()
+                black_id = event.get("black", {}).get("id", "").lower()
                 robot_side = chess.BLACK if white_id == opponent_username.lower() else chess.WHITE
                 actual_color = "white" if robot_side == chess.WHITE else "black"
-                if actual_color != color:
-                    print(f"[WARN] Requested {color} but Lichess assigned {actual_color} to the robot")
-                else:
-                    print(f"[INFO] Robot is {actual_color}")
+                log.info("Robot is %s (opponent=%s)", actual_color, opponent_username)
 
             state = event.get("state", event) if event["type"] == "gameFull" else event
             server_moves = [m for m in state.get("moves", "").split() if m]

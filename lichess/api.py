@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import urllib.parse
 
 import httpx
 
@@ -35,16 +36,17 @@ async def stream_game(game_id: str):
 
 
 async def challenge_user(username: str, color: str = "black") -> dict:
+    body = urllib.parse.urlencode({
+        "rated": "false",
+        "clock.limit": "900",
+        "clock.increment": "10",
+        "color": color,
+    })
     async with httpx.AsyncClient() as client:
         res = await client.post(
             f"{BASE}/api/challenge/{username}",
             headers={**_auth(), "Content-Type": "application/x-www-form-urlencoded"},
-            data={
-                "rated": "false",
-                "clock.limit": 900,
-                "clock.increment": 10,
-                "color": color,
-            },
+            content=body,
         )
         if not res.is_success:
             raise RuntimeError(f"Lichess {res.status_code}: {res.text}")
