@@ -195,6 +195,16 @@ async def play_game(opponent_username: str, personality: str = "Cocky", color: s
             if event["type"] not in ("gameFull", "gameState"):
                 continue
 
+            # On gameFull, lock in robot_side from what Lichess actually assigned
+            if event["type"] == "gameFull":
+                white_id = event.get("white", {}).get("id", "").lower()
+                robot_side = chess.BLACK if white_id == opponent_username.lower() else chess.WHITE
+                actual_color = "white" if robot_side == chess.WHITE else "black"
+                if actual_color != color:
+                    print(f"[WARN] Requested {color} but Lichess assigned {actual_color} to the robot")
+                else:
+                    print(f"[INFO] Robot is {actual_color}")
+
             state = event.get("state", event) if event["type"] == "gameFull" else event
             server_moves = [m for m in state.get("moves", "").split() if m]
 
