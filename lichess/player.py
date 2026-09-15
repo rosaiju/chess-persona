@@ -222,7 +222,7 @@ async def play_game(
         # Game start quip
         quip = get_quip(personality, "game_start")
         if quip:
-            yield {"type": "quip", "text": quip, "personality": personality}
+            yield {"type": "quip", "text": quip, "personality": personality, "capture": False}
 
         board = chess.Board()
         prev_eval: int | None = None
@@ -263,7 +263,7 @@ async def play_game(
                 trigger = _game_over_trigger(final_board, ai_side)
                 quip = get_quip(personality, trigger)
                 if quip:
-                    yield {"type": "quip", "text": quip, "personality": personality}
+                    yield {"type": "quip", "text": quip, "personality": personality, "capture": False}
                 yield {
                     "type": "done",
                     "status": status,
@@ -281,6 +281,7 @@ async def play_game(
                 move = chess.Move.from_uci(uci)
                 board_before = board.copy()
                 is_ai_move = (board.turn == ai_side)
+                is_capture = board_before.is_capture(move)
 
                 eval_before = prev_eval
                 board.push(move)
@@ -304,7 +305,7 @@ async def play_game(
                 if trigger:
                     quip = get_quip(personality, trigger)
                     if quip:
-                        yield {"type": "quip", "text": quip, "personality": personality}
+                        yield {"type": "quip", "text": quip, "personality": personality, "capture": is_ai_move and is_capture}
 
                 prev_eval = eval_after
 
@@ -349,7 +350,7 @@ async def play_game(
                 if trigger:
                     quip = get_quip(personality, trigger)
                     if quip:
-                        yield {"type": "quip", "text": quip, "personality": personality}
+                        yield {"type": "quip", "text": quip, "personality": personality, "capture": is_capture}
 
                 prev_eval = eval_after
 
@@ -365,7 +366,7 @@ async def play_game(
                     trigger = _game_over_trigger(board, ai_side)
                     quip = get_quip(personality, trigger)
                     if quip:
-                        yield {"type": "quip", "text": quip, "personality": personality}
+                        yield {"type": "quip", "text": quip, "personality": personality, "capture": False}
                     yield {
                         "type": "done",
                         "status": "mate",

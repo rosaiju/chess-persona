@@ -438,9 +438,22 @@
   // ── TTS queue — fetch edge-tts audio + ring-mod robot effect ────────────────
   const ttsQueue = [];
   let ttsSpeaking = false;
+  const _pendingSpeakTimers = [];   // setTimeout IDs for delayed speaks
 
-  function speak(text) {
+  function speak(text, delayMs = 0) {
     if (ttsMuted) return;
+    if (delayMs > 0) {
+      const id = setTimeout(() => {
+        const idx = _pendingSpeakTimers.indexOf(id);
+        if (idx !== -1) _pendingSpeakTimers.splice(idx, 1);
+        if (ttsQueue.length < 2) {
+          ttsQueue.push(text);
+          if (!ttsSpeaking) _processQueue();
+        }
+      }, delayMs);
+      _pendingSpeakTimers.push(id);
+      return;
+    }
     if (ttsQueue.length >= 2) return;
     ttsQueue.push(text);
     if (!ttsSpeaking) _processQueue();
@@ -472,6 +485,9 @@
   }
 
   function _resetTTS() {
+    // Cancel any pending delayed speaks
+    _pendingSpeakTimers.forEach(id => clearTimeout(id));
+    _pendingSpeakTimers.length = 0;
     ttsQueue.length = 0;
     ttsSpeaking = false;
     // keep _audioCtx alive — unlocked by the Play button click
@@ -779,9 +795,12 @@
         addLog(`Chess Persona: ${e.uci} (move ${e.moveNum})`);
         break;
 
-      case 'quip':
+      case 'quip': {
         addChatBubble(e.text, e.personality);
-        speak(e.text); break;
+        const captureDelay = (isSenseRobotMode && e.capture) ? 5000 : 0;
+        speak(e.text, captureDelay);
+        break;
+      }
 
       case 'error':
         setStatus(`Error: ${e.text}`, 'red');
@@ -792,6 +811,7 @@
         break;
 
       case 'done': {
+        _resetTTS();  // cancel any pending delayed quips
         const aiWon    = (aiSide === 'white' && e.result === '1-0') ||
                          (aiSide === 'black' && e.result === '0-1');
         const humanWon = (aiSide === 'white' && e.result === '0-1') ||

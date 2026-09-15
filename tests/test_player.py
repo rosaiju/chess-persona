@@ -6,6 +6,7 @@ Covers:
 - AI only moves on its own turn
 - Double-processing guard
 - _game_over_trigger results
+- capture flag on quip events (for SenseRobot TTS delay)
 """
 import chess
 import pytest
@@ -291,3 +292,126 @@ def test_result_draw():
     assert trigger == "draw"
     trigger2 = _game_over_trigger(board, chess.BLACK)
     assert trigger2 == "draw"
+
+
+# ── Tests 16-18: capture flag on quip events ─────────────────────────────────
+
+def _common_capture_test_patches(monkeypatch, bot="chesspersonadbot"):
+    monkeypatch.setattr(player_module, "LICHESS_BOT_USERNAME", bot)
+
+    async def fake_validate():
+        return {"id": bot, "username": bot, "title": "BOT"}
+
+    async def fake_challenge(username, color="black"):
+        return {"challenge": {"id": "game1"}}
+
+    async def fake_stream_events():
+        yield {"type": "gameStart", "game": {"gameId": "game1"}}
+
+    monkeypatch.setattr(player_module, "validate_bot_account", fake_validate)
+    monkeypatch.setattr(player_module, "challenge_user", fake_challenge)
+    monkeypatch.setattr(player_module, "stream_account_events", fake_stream_events)
+    monkeypatch.setattr(player_module, "_open_engine", AsyncMock(return_value=None))
+    monkeypatch.setattr(player_module, "make_move", AsyncMock())
+    # Always emit a quip so capture flag is observable
+    monkeypatch.setattr(player_module, "get_quip", lambda personality, trigger: "test quip")
+
+
+@pytest.mark.asyncio
+async def test_capture_quip_has_capture_true(monkeypatch):
+    """AI capture move quip event must have capture=True.
+
+    Position after e2e4 e7e5 d2d4: Black (bot) can play e5xd4 — a capture.
+    """
+    _common_capture_test_patches(monkeypatch)
+
+    async def fake_stream_game(game_id):
+        # 3 half-moves played; it's Black's turn
+        yield make_gamefull("human", "chesspersonadbot", moves="e2e4 e7e5 d2d4")
+
+    async def fake_best_move(engine, board):
+        return chess.Move.from_uci("e5d4")   # pawn captures d4
+
+    monkeypatch.setattr(player_module, "stream_game", fake_stream_game)
+    monkeypatch.setattr(player_module, "_best_move", fake_best_move)
+
+    events = await collect_events(play_game("human", color="black"))
+
+    quip_events = [e for e in events if e["type"] == "quip"]
+    # The quip emitted after the AI's own move (e5d4 capture) must have capture=True
+    ai_move_quips = [e for e in quip_events if e.get("capture") is True]
+    assert len(ai_move_quips) >= 1, (
+        f"Expected at least one quip with capture=True, got: {quip_events}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_non_capture_quip_has_capture_false(monkeypatch):
+    """AI non-capture move quip event must have capture=False.
+
+    Position after e2e4: Black (bot) plays e7e5 — no capture.
+    """
+    _common_capture_test_patches(monkeypatch)
+
+    async def fake_stream_game(game_id):
+        yield make_gamefull("human", "chesspersonadbot", moves="e2e4")
+
+    async def fake_best_move(engine, board):
+        return chess.Move.from_uci("e7e5")   # pawn advance, no capture
+
+    monkeypatch.setattr(player_module, "stream_game", fake_stream_game)
+    monkeypatch.setattr(player_module, "_best_move", fake_best_move)
+
+    events = await collect_events(play_game("human", color="black"))
+
+    quip_events = [e for e in events if e["type"] == "quip"]
+    for e in quip_events:
+        assert e.get("capture") is not True, (
+            f"Non-capture move quip must not have capture=True, got: {e}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_capture_and_check_uses_capture_flag(monkeypatch):
+    """When an AI move is both a capture and gives check, quip has capture=True.
+
+    After e2e4 d7d5 e4d5 (bot White captures d5 pawn) e7e6 d5e6 (bot captures e6,
+    giving discovered check is complex to arrange simply, so we verify the flag
+    via the new_moves replay path: stream a gameFull where the bot's move is a
+    capture that happens to give check, using a constructed position.
+
+    Simple approach: replay moves where Black (human) blundered a piece, bot
+    captures it. The capture=True flag must be set regardless of which trigger
+    fires (robot_check, robot_captures, etc.).
+    """
+    _common_capture_test_patches(monkeypatch)
+
+    # After e2e4 e7e5 d2d4 e5d4 (already replayed in gameFull moves),
+    # the bot (White this time) can recapture with c2c3... that's complex.
+    # Simpler: put a completed capture+check into the moves string so it
+    # is replayed through the new_moves loop and verify capture flag.
+    #
+    # Scholar's mate sequence ends with Qf7# (queen captures f7 and gives check).
+    # 1.e4 e5 2.Bc4 Nc6 3.Qh5 Nf6?? 4.Qxf7#
+    # moves: e2e4 e7e5 f1c4 b8c6 d1h5 g8f6 h5f7
+    # White (bot) plays h5f7 — captures f7 pawn and gives checkmate.
+    scholar_moves = "e2e4 e7e5 f1c4 b8c6 d1h5 g8f6"
+
+    async def fake_stream_game(game_id):
+        # Bot is White; 6 moves played, it's White's turn
+        yield make_gamefull("chesspersonadbot", "human", moves=scholar_moves)
+
+    async def fake_best_move(engine, board):
+        return chess.Move.from_uci("h5f7")   # Qxf7# — capture + checkmate
+
+    monkeypatch.setattr(player_module, "stream_game", fake_stream_game)
+    monkeypatch.setattr(player_module, "_best_move", fake_best_move)
+
+    events = await collect_events(play_game("human", color="white"))
+
+    quip_events = [e for e in events if e["type"] == "quip"]
+    # The AI's Qxf7# quip must have capture=True
+    capture_quips = [e for e in quip_events if e.get("capture") is True]
+    assert len(capture_quips) >= 1, (
+        f"Expected capture=True on capture+checkmate quip, got: {quip_events}"
+    )
