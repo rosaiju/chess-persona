@@ -40,7 +40,11 @@ def _broadcast(event: dict):
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    return Path("templates/index.html").read_text(encoding="utf-8")
+    content = Path("templates/index.html").read_text(encoding="utf-8")
+    return HTMLResponse(
+        content=content,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
 
 
 @app.get("/events")

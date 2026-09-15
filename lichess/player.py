@@ -2,6 +2,7 @@ import asyncio
 import logging
 import random
 import shutil
+import time
 import chess
 import chess.engine
 
@@ -247,7 +248,7 @@ async def play_game(
                     yield {"type": "error", "text": "Bot account not found in this game"}
                     break
                 physical_player_side = chess.BLACK if ai_side == chess.WHITE else chess.WHITE
-                print(f"[DEBUG] gameFull: white={white_id} black={black_id} -> ai is {'white' if ai_side == chess.WHITE else 'black'}")
+                print(f"[{time.strftime('%H:%M:%S')}][DEBUG] gameFull: white={white_id} black={black_id} -> ai is {'white' if ai_side == chess.WHITE else 'black'}")
                 log.info("AI is %s", "white" if ai_side == chess.WHITE else "black")
 
             state = event.get("state", event) if event["type"] == "gameFull" else event
@@ -276,7 +277,7 @@ async def play_game(
             # Process any NEW moves from the server.
             # seen_move_count prevents reprocessing moves already handled.
             new_moves = server_moves[seen_move_count:]
-            print(f"[DEBUG] {event['type']}: server_moves={server_moves} new={new_moves} ai_side={'BLACK' if ai_side == chess.BLACK else 'WHITE'} board_turn={'b' if board.turn == chess.BLACK else 'w'}")
+            print(f"[{time.strftime('%H:%M:%S')}][DEBUG] {event['type']}: server_moves={server_moves} new={new_moves} ai_side={'BLACK' if ai_side == chess.BLACK else 'WHITE'} board_turn={'b' if board.turn == chess.BLACK else 'w'}")
             for uci in new_moves:
                 move = chess.Move.from_uci(uci)
                 board_before = board.copy()
@@ -305,7 +306,9 @@ async def play_game(
                 if trigger:
                     quip = get_quip(personality, trigger)
                     if quip:
-                        yield {"type": "quip", "text": quip, "personality": personality, "capture": is_ai_move and is_capture}
+                        _cap = is_ai_move and is_capture
+                        print(f"[{time.strftime('%H:%M:%S')}][QUIP] trigger={trigger} capture={_cap} text={quip[:40]!r}")
+                        yield {"type": "quip", "text": quip, "personality": personality, "capture": _cap}
 
                 prev_eval = eval_after
 
@@ -313,21 +316,21 @@ async def play_game(
             if board.turn == ai_side and not board.is_game_over():
                 yield {"type": "thinking"}
                 move = await _best_move(engine, board)
-                print(f"[DEBUG] AI move chosen: {move}")
+                print(f"[{time.strftime('%H:%M:%S')}][DEBUG] AI move chosen: {move}")
                 if not move:
-                    print("[DEBUG] No move found - breaking")
+                    print(f"[{time.strftime('%H:%M:%S')}][DEBUG] No move found - breaking")
                     break
 
                 is_capture = board.is_capture(move)
                 board_before = board.copy()
                 eval_before = prev_eval
 
-                print(f"[DEBUG] Calling make_move({game_id}, {move.uci()})")
+                print(f"[{time.strftime('%H:%M:%S')}][DEBUG] Calling make_move({game_id}, {move.uci()})")
                 try:
                     await make_move(game_id, move.uci())
-                    print(f"[DEBUG] make_move succeeded")
+                    print(f"[{time.strftime('%H:%M:%S')}][DEBUG] make_move succeeded")
                 except Exception as e:
-                    print(f"[DEBUG] make_move FAILED: {e!r}")
+                    print(f"[{time.strftime('%H:%M:%S')}][DEBUG] make_move FAILED: {e!r}")
                     yield {"type": "error", "text": f"Move failed: {e}"}
                     break
 
@@ -350,6 +353,7 @@ async def play_game(
                 if trigger:
                     quip = get_quip(personality, trigger)
                     if quip:
+                        print(f"[{time.strftime('%H:%M:%S')}][QUIP] trigger={trigger} capture={is_capture} text={quip[:40]!r}")
                         yield {"type": "quip", "text": quip, "personality": personality, "capture": is_capture}
 
                 prev_eval = eval_after
