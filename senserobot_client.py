@@ -23,7 +23,7 @@ import subprocess
 import time
 import urllib.request
 
-SERVER = sys.argv[1].rstrip("/") if len(sys.argv) > 1 else "http://localhost:8000"
+SERVER = sys.argv[1].rstrip("/") if len(sys.argv) > 1 else "http://localhost:8001"
 EVENTS_URL = f"{SERVER}/events"
 TTS_URL = f"{SERVER}/tts"
 
@@ -92,6 +92,29 @@ def speak(text: str, personality: str = "Cocky"):
         speak_local(text)
 
 
+_robot_color = "black"   # updated on each "started" event
+_current_fen = None      # updated on each "fen" event
+
+
+def on_game_started(event: dict):
+    global _robot_color, _current_fen
+    _robot_color = event.get("color", "black")
+    _current_fen = event.get("fen")
+    print(f"[GAME] Started vs {event.get('opponent')} — robot is {_robot_color}")
+    print(f"[GAME] Starting FEN: {_current_fen}")
+
+
+def on_fen(event: dict):
+    global _current_fen
+    _current_fen = event.get("fen")
+
+
+def on_robot_move(event: dict):
+    uci = event.get("uci", "")
+    move_num = event.get("moveNum", "?")
+    print(f"[MOVE] Robot played: {uci}  (move {move_num})  fen={event.get('fen', '')}")
+
+
 def connect_and_listen():
     print(f"[SenseRobot Client] Connecting to {EVENTS_URL} ...")
     while True:
@@ -117,11 +140,15 @@ def connect_and_listen():
                                 try:
                                     event = json.loads(line[6:])
                                     etype = event.get("type")
-                                    if etype == "quip":
+                                    if etype == "started":
+                                        on_game_started(event)
+                                    elif etype == "fen":
+                                        on_fen(event)
+                                    elif etype == "move":
+                                        on_robot_move(event)
+                                    elif etype == "quip":
                                         speak(event["text"],
                                               event.get("personality", "Cocky"))
-                                    elif etype == "started":
-                                        print(f"[GAME] Started vs {event.get('opponent')}")
                                     elif etype == "done":
                                         print(f"[GAME] Over — {event.get('result', event.get('status'))}")
                                 except json.JSONDecodeError:

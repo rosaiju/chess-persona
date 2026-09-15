@@ -14,7 +14,12 @@ from fastapi.responses import StreamingResponse, HTMLResponse, Response
 from pydantic import BaseModel
 
 from lichess.player import play_game
-from lichess.api import make_human_move
+from lichess.api import (
+    make_human_board_move,
+    validate_bot_account,
+    LICHESS_BOT_USERNAME,
+    SENSEROBOT_LICHESS_USERNAME,
+)
 
 app = FastAPI()
 
@@ -64,7 +69,8 @@ async def events():
 class PlayRequest(BaseModel):
     opponent: str
     personality: str = "Cocky"
-    color: str = "black"   # robot (Sainju) is always Black — hardware constraint
+    color: str = "black"   # color the AI plays as; physical board player plays the opposite
+    senserobot_mode: bool = False
 
 
 class MoveRequest(BaseModel):
@@ -96,10 +102,18 @@ async def tts(text: str, personality: str = "Cocky"):
 @app.post("/play")
 async def play(req: PlayRequest):
     async def event_stream():
-        async for event in play_game(req.opponent.strip(), req.personality, req.color):
+        # First event: mode announcement
+        yield f"data: {json.dumps({'type': 'mode', 'senserobot_mode': req.senserobot_mode})}\n\n"
+
+        async for event in play_game(
+            req.opponent.strip(),
+            req.personality,
+            req.color,
+            senserobot_mode=req.senserobot_mode,
+        ):
             yield f"data: {json.dumps(event)}\n\n"
             # Broadcast selected events to external subscribers (SenseRobot)
-            if event.get("type") in ("quip", "started", "fen", "done"):
+            if event.get("type") in ("quip", "started", "fen", "move", "done"):
                 _broadcast(event)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -107,11 +121,27 @@ async def play(req: PlayRequest):
 
 @app.post("/move")
 async def human_move(req: MoveRequest):
-    token = os.environ.get("LICHESS_HUMAN_TOKEN", "")
-    if not token:
-        raise HTTPException(status_code=400, detail="LICHESS_HUMAN_TOKEN not set in .env")
+    """
+    Browser-only endpoint. Not called in SenseRobot mode — the physical board
+    handles human moves directly via the Lichess Board API.
+    """
     try:
-        await make_human_move(req.game_id, req.uci, token)
+        await make_human_board_move(req.game_id, req.uci)
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"ok": True}
+
+
+@app.get("/account")
+async def account():
+    try:
+        info = await validate_bot_account()
+        return {
+            "bot_username": info["username"],
+            "senserobot_username": SENSEROBOT_LICHESS_USERNAME,
+            "status": "ok",
+        }
+    except ValueError as e:
+        raise HTTPException(400, detail=str(e))
+    except RuntimeError:
+        raise HTTPException(500, detail="Server configuration error — token not set")

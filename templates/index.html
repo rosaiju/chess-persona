@@ -73,7 +73,7 @@
     /* ── Fields ── */
     .field { display: flex; flex-direction: column; gap: 6px; }
     .field label { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-    input {
+    input[type="text"], input:not([type]) {
       background: #1a1a1a;
       border: 1px solid #2a2a2a;
       border-radius: 6px;
@@ -84,8 +84,19 @@
       transition: border-color 0.15s;
       width: 100%;
     }
-    input:focus { border-color: #444; }
-    input:disabled { opacity: 0.4; }
+    input[type="text"]:focus, input:not([type]):focus { border-color: #444; }
+    input[type="text"]:disabled, input:not([type]):disabled { opacity: 0.4; }
+
+    /* ── SenseRobot toggle ── */
+    .senserobot-row {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.82rem; color: #666;
+      padding: 8px 12px;
+      background: #111; border: 1px solid #1e1e1e; border-radius: 6px;
+    }
+    .senserobot-row input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+    .senserobot-row label { cursor: pointer; user-select: none; }
+    .senserobot-row.active { border-color: #7c3aed44; background: #1a0f2a; color: #c4b5fd; }
 
     .btn-primary {
       background: #2563eb; color: #fff; border: none;
@@ -104,15 +115,6 @@
       transition: all 0.15s; width: 100%;
     }
     .btn-rematch:hover { border-color: #555; color: #fff; }
-
-    .sense-row { display: flex; }
-    .sense-btn {
-      flex: 1; background: #111; border: 1px solid #2a2a2a; border-radius: 6px;
-      padding: 8px 12px; color: #555; font-size: 0.8rem; font-weight: 600;
-      cursor: pointer; transition: all 0.15s; text-align: left;
-    }
-    .sense-btn:hover { border-color: #444; color: #aaa; }
-    .sense-btn.active { background: #0a1a2a; border-color: #2563eb; color: #60a5fa; }
 
     /* ── Status badges ── */
     .status-badge {
@@ -170,6 +172,15 @@
       outline: 4px inset rgba(0,0,0,0.22);
     }
     .chess-board.human-turn .sq { cursor: pointer; }
+    .chess-board.view-only .sq { cursor: default; }
+
+    /* ── Game info panel ── */
+    #game-info {
+      background: #111; border: 1px solid #1e1e1e; border-radius: 6px;
+      padding: 10px 12px; font-size: 0.78rem; color: #555;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    #game-info span { color: #999; }
 
     /* ── Log ── */
     .log {
@@ -274,14 +285,13 @@
 
     <div class="field">
       <label>Opponent Lichess Username</label>
-      <input id="opp-input" placeholder="e.g. rosaiju"
+      <input type="text" id="opp-input" placeholder="e.g. rosaiju"
              onkeydown="if(event.key==='Enter') startGame()" />
     </div>
 
-    <div class="sense-row">
-      <button class="sense-btn" id="sense-btn" onclick="toggleSenseRobot()">
-        🤖 SenseRobot Mode: OFF
-      </button>
+    <div class="senserobot-row" id="senserobot-row">
+      <input type="checkbox" id="senserobot-mode" onchange="onSenseRobotToggle()" />
+      <label for="senserobot-mode">SenseRobot mode (physical board)</label>
     </div>
 
     <button class="btn-primary" id="play-btn" onclick="startGame()">Play</button>
@@ -296,6 +306,12 @@
 
     <div class="board-wrap">
       <div class="chess-board" id="board"></div>
+    </div>
+
+    <div id="game-info" style="display:none">
+      <div>AI account: <span id="gi-bot">—</span></div>
+      <div>Physical player: <span id="gi-human">—</span></div>
+      <div>AI plays: <span id="gi-color">—</span></div>
     </div>
 
     <div class="log" id="log"></div>
@@ -362,14 +378,10 @@
   let gameUrl = '';
   let bubbleCount = 0;
   let lastOpponent = '';
-  let senseRobotMode = false;
 
-  function toggleSenseRobot() {
-    senseRobotMode = !senseRobotMode;
-    const btn = document.getElementById('sense-btn');
-    btn.textContent = `🤖 SenseRobot Mode: ${senseRobotMode ? 'ON' : 'OFF'}`;
-    btn.classList.toggle('active', senseRobotMode);
-  }
+  // ── SenseRobot + game state ──────────────────────────────────────────────────
+  let isSenseRobotMode = false;
+  let aiSide = 'black';  // set from 'started' event
 
   // ── Board interaction state ──────────────────────────────────────────────────
   let chess       = null;   // chess.js instance
@@ -377,6 +389,30 @@
   let legalDests  = [];     // legal destination squares for selected piece
   let isHumanTurn = false;
   let currentGameId = null;
+
+  // ── Account info (fetched on page load) ─────────────────────────────────────
+  let accountInfo = null;
+
+  async function loadAccountInfo() {
+    try {
+      const res = await fetch('/account');
+      if (res.ok) {
+        accountInfo = await res.json();
+        document.getElementById('gi-bot').textContent   = accountInfo.bot_username || '—';
+        document.getElementById('gi-human').textContent = accountInfo.senserobot_username || '—';
+      }
+    } catch (e) {
+      // Non-critical — account info panel just stays empty
+    }
+  }
+  loadAccountInfo();
+
+  // ── SenseRobot toggle ────────────────────────────────────────────────────────
+
+  function onSenseRobotToggle() {
+    const checked = document.getElementById('senserobot-mode').checked;
+    document.getElementById('senserobot-row').classList.toggle('active', checked);
+  }
 
   // ── Personality selector ─────────────────────────────────────────────────────
 
@@ -556,6 +592,8 @@
   // ── Board click logic ────────────────────────────────────────────────────────
 
   function handleSquareClick(sq) {
+    // Disable clicks in SenseRobot mode — physical board handles moves
+    if (isSenseRobotMode) return;
     if (!isHumanTurn || !currentGameId || !chess) return;
 
     const piece = chess.get(sq);
@@ -576,8 +614,9 @@
       clearSelection();
     }
 
-    // Select the human's piece (human is always White)
-    if (piece && piece.color === 'w') {
+    // Select the human's piece (color depends on which side the human plays)
+    const humanColor = aiSide === 'black' ? 'w' : 'b';
+    if (piece && piece.color === humanColor) {
       selectedSq  = sq;
       legalDests  = chess.moves({ square: sq, verbose: true }).map(m => m.to);
       highlightSquares();
@@ -658,6 +697,14 @@
 
   function handleEvent(e) {
     switch (e.type) {
+      case 'mode':
+        isSenseRobotMode = e.senserobot_mode;
+        if (isSenseRobotMode) {
+          document.getElementById('board').classList.add('view-only');
+          setStatus('SenseRobot mode — moves submitted by physical board', 'blue');
+        }
+        break;
+
       case 'challenging':
         setStatus(`Challenging ${e.opponent}…`, 'blue'); break;
 
@@ -669,10 +716,21 @@
 
       case 'started':
         currentGameId = e.gameId;
-        lastOpponent = e.opponent;
+        lastOpponent  = e.opponent;
+        aiSide        = e.ai_side || 'black';
         chess = new Chess();
-        renderBoard(START_FEN, false);
-        setStatus(`Game started! You are White — click your pieces to move.`, 'green');
+        // Orient board from the physical player's perspective
+        const blackPov = (aiSide === 'white');  // human plays black → black pov
+        renderBoard(START_FEN, blackPov);
+        // Update game info panel
+        document.getElementById('gi-color').textContent = aiSide;
+        document.getElementById('game-info').style.display = '';
+        if (isSenseRobotMode) {
+          setStatus('SenseRobot mode active. Make your move on the physical board.', 'green');
+        } else {
+          const humanSideLabel = aiSide === 'black' ? 'White' : 'Black';
+          setStatus(`Game started! You are ${humanSideLabel} — click your pieces to move.`, 'green');
+        }
         addLog(`${e.opponent} accepted. Game: ${e.url}`); break;
 
       case 'declined':
@@ -684,22 +742,41 @@
         addLog('Challenge timed out.'); break;
 
       case 'thinking':
-        setStatus('Robot is thinking…', 'blue'); break;
+        setStatus('Chess Persona is thinking…', 'blue'); break;
 
-      case 'fen':
+      case 'fen': {
         if (chess) chess.load(e.fen);
-        renderBoard(e.fen, false);
+        const blackPov2 = (aiSide === 'white');
+        renderBoard(e.fen, blackPov2);
         clearSelection();
-        isHumanTurn = !senseRobotMode && e.fen.split(' ')[1] === 'w';
-        document.getElementById('board').classList.toggle('human-turn', isHumanTurn);
-        if (e.fen.split(' ')[1] === 'w') {
-          setStatus(senseRobotMode ? 'SenseRobot is thinking…' : 'Your turn — click a piece to move.', 'green');
+
+        const toMove = e.fen.split(' ')[1]; // 'w' or 'b'
+        const isPhysicalTurn = (toMove === 'w' && aiSide === 'black') ||
+                               (toMove === 'b' && aiSide === 'white');
+
+        if (isSenseRobotMode) {
+          isHumanTurn = false;
+          document.getElementById('board').classList.remove('human-turn');
+          setStatus(
+            isPhysicalTurn
+              ? 'Your turn — move on the physical board.'
+              : 'Chess Persona is thinking…',
+            isPhysicalTurn ? 'green' : 'blue'
+          );
+        } else {
+          isHumanTurn = isPhysicalTurn;
+          document.getElementById('board').classList.toggle('human-turn', isHumanTurn);
+          if (isPhysicalTurn) {
+            const label = aiSide === 'black' ? 'White' : 'Black';
+            setStatus(`${label} to move…`, 'green');
+          }
         }
         break;
+      }
 
       case 'move':
-        setStatus(`Robot played: ${e.uci} (move ${e.moveNum})`, 'green');
-        addLog(`Black: ${e.uci} (move ${e.moveNum})`);
+        setStatus(`Chess Persona played: ${e.uci} (move ${e.moveNum})`, 'green');
+        addLog(`Chess Persona: ${e.uci} (move ${e.moveNum})`);
         break;
 
       case 'quip':
@@ -714,13 +791,16 @@
         document.getElementById('opp-input').disabled = false;
         break;
 
-      case 'done':
-        const resultText = {
-          '1-0': '✓ Robot wins!',
-          '0-1': '✓ You win!',
-          '1/2-1/2': '½ Draw',
-        }[e.result] || `Game over (${e.status})`;
-        setStatus(resultText, e.result === '1-0' ? 'amber' : 'green');
+      case 'done': {
+        const aiWon    = (aiSide === 'white' && e.result === '1-0') ||
+                         (aiSide === 'black' && e.result === '0-1');
+        const humanWon = (aiSide === 'white' && e.result === '0-1') ||
+                         (aiSide === 'black' && e.result === '1-0');
+        const resultText = aiWon ? '✓ Chess Persona wins!'
+                         : humanWon ? '✓ You win!'
+                         : e.result === '1/2-1/2' ? '½ Draw'
+                         : `Game over (${e.status})`;
+        setStatus(resultText, aiWon ? 'amber' : 'green');
         addLog(`Game over: ${e.result || e.status}`);
         if (e.url) setGameLink(e.url);
         document.getElementById('play-btn').disabled = false;
@@ -728,6 +808,7 @@
         document.getElementById('opp-input').disabled = false;
         if (lastOpponent) document.getElementById('rematch-btn').style.display = '';
         break;
+      }
     }
   }
 
@@ -742,29 +823,39 @@
     const opponent = document.getElementById('opp-input').value.trim();
     if (!opponent) { document.getElementById('opp-input').focus(); return; }
 
+    const senseRobotChecked = document.getElementById('senserobot-mode').checked;
+
     document.getElementById('play-btn').disabled = true;
     document.getElementById('play-btn').textContent = 'Connecting…';
     document.getElementById('opp-input').disabled = true;
     document.getElementById('rematch-btn').style.display = 'none';
     document.getElementById('log').innerHTML = '';
     document.getElementById('game-link').style.display = 'none';
+    document.getElementById('game-info').style.display = 'none';
     document.getElementById('chat-empty').style.display = '';
     document.querySelectorAll('.bubble').forEach(b => b.remove());
     hideStatus();
     chess = null;
     isHumanTurn = false;
+    isSenseRobotMode = false;
+    aiSide = 'black';
     currentGameId = null;
     clearSelection();
     _resetTTS();
     _unlockAudio();   // must happen during the button-click user gesture
-    document.getElementById('board').classList.remove('human-turn');
+    const boardEl = document.getElementById('board');
+    boardEl.classList.remove('human-turn', 'view-only');
     renderBoard(START_FEN, false);
 
     try {
       const res = await fetch('/play', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ opponent, personality: currentPersonality }),
+        body: JSON.stringify({
+          opponent,
+          personality: currentPersonality,
+          senserobot_mode: senseRobotChecked,
+        }),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
 
