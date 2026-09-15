@@ -247,7 +247,7 @@ async def play_game(
                     yield {"type": "error", "text": "Bot account not found in this game"}
                     break
                 physical_player_side = chess.BLACK if ai_side == chess.WHITE else chess.WHITE
-                print(f"[DEBUG] gameFull: white={white_id} black={black_id} → ai is {'white' if ai_side == chess.WHITE else 'black'}")
+                print(f"[DEBUG] gameFull: white={white_id} black={black_id} -> ai is {'white' if ai_side == chess.WHITE else 'black'}")
                 log.info("AI is %s", "white" if ai_side == chess.WHITE else "black")
 
             state = event.get("state", event) if event["type"] == "gameFull" else event
@@ -314,7 +314,7 @@ async def play_game(
                 move = await _best_move(engine, board)
                 print(f"[DEBUG] AI move chosen: {move}")
                 if not move:
-                    print("[DEBUG] No move found — breaking")
+                    print("[DEBUG] No move found - breaking")
                     break
 
                 is_capture = board.is_capture(move)

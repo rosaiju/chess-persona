@@ -6,6 +6,7 @@ Covers:
 - Token validation and error safety
 - validate_bot_account() account guard rules
 - SSE stream error propagation (no Python traceback)
+- Windows CP1252 safety of all print/log strings in the game path
 """
 import pytest
 import respx
@@ -227,3 +228,44 @@ async def test_missing_token_yields_error_event(monkeypatch):
     assert events[0]["type"] == "error"
     assert "Traceback" not in events[0].get("text", "")
     assert "LICHESS_BOT_TOKEN" in events[0].get("text", "")
+
+
+# ── Test 16: no non-CP1252 characters in game-path print/log strings ──────────
+
+def test_no_non_cp1252_in_debug_prints():
+    """
+    Regression for Windows UnicodeEncodeError (cp1252 codec).
+    Scans all string literals passed to print() and log.*() in player.py
+    and verifies they encode cleanly under cp1252.
+    """
+    import ast, pathlib
+
+    source = pathlib.Path("lichess/player.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    bad = []
+    for node in ast.walk(tree):
+        # Match print(...) and log.info/debug/warn/error(...)
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        is_print = isinstance(func, ast.Name) and func.id == "print"
+        is_log = (
+            isinstance(func, ast.Attribute)
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "log"
+        )
+        if not (is_print or is_log):
+            continue
+        # Check every string constant argument
+        for arg in node.args:
+            for subnode in ast.walk(arg):
+                if isinstance(subnode, ast.Constant) and isinstance(subnode.value, str):
+                    try:
+                        subnode.value.encode("cp1252")
+                    except UnicodeEncodeError as e:
+                        bad.append(
+                            f"Line {node.lineno}: {subnode.value!r} -> {e}"
+                        )
+
+    assert bad == [], "Non-CP1252 characters found in print/log calls:\n" + "\n".join(bad)
