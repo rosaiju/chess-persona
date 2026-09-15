@@ -797,7 +797,14 @@
 
       case 'quip': {
         addChatBubble(e.text, e.personality);
-        const captureDelay = (isSenseRobotMode && e.capture) ? 5000 : 0;
+        const captureDelay = (isSenseRobotMode && e.capture === true) ? 5000 : 0;
+        console.log('[QUIP]', JSON.stringify({
+          text: e.text.slice(0, 40),
+          capture: e.capture,
+          captureType: typeof e.capture,
+          isSenseRobotMode,
+          captureDelay,
+        }));
         speak(e.text, captureDelay);
         break;
       }

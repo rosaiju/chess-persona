@@ -147,6 +147,8 @@ def connect_and_listen():
                                     elif etype == "move":
                                         on_robot_move(event)
                                     elif etype == "quip":
+                                        if event.get("capture") is True:
+                                            time.sleep(5)
                                         speak(event["text"],
                                               event.get("personality", "Cocky"))
                                     elif etype == "done":

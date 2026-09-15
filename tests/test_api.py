@@ -269,3 +269,95 @@ def test_no_non_cp1252_in_debug_prints():
                         )
 
     assert bad == [], "Non-CP1252 characters found in print/log calls:\n" + "\n".join(bad)
+
+
+# ── Tests 17-19: frontend SSE event structure + delay logic ──────────────────
+
+def test_capture_quip_json_is_boolean_true():
+    """
+    Verify Python json.dumps serialises capture=True as JSON true (not 1 or "True").
+    Simulates the SSE bytes the browser receives and parses.
+    """
+    import json
+
+    # Exact structure player.py emits for an AI capture quip
+    event = {"type": "quip", "text": "Ha! I'll take that.", "personality": "Cocky", "capture": True}
+    sse_line = f"data: {json.dumps(event)}\n\n"
+
+    # Simulate JS: line.slice(6) → JSON.parse(...)
+    payload = sse_line.strip()
+    assert payload.startswith("data: ")
+    parsed = json.loads(payload[6:])
+
+    assert parsed["capture"] is True,  "capture must be Python True"
+    assert type(parsed["capture"]) is bool, "capture must be bool, not int or str"
+
+    # Non-capture quip
+    nc_event = {"type": "quip", "text": "Interesting.", "personality": "Cocky", "capture": False}
+    nc_parsed = json.loads(f"data: {json.dumps(nc_event)}"[6:])
+    assert nc_parsed["capture"] is False
+    assert type(nc_parsed["capture"]) is bool
+
+
+def test_frontend_delay_logic_using_exact_sse_json():
+    """
+    Simulate the exact JS delay calculation:
+        const captureDelay = (isSenseRobotMode && e.capture === true) ? 5000 : 0;
+
+    Uses the exact JSON payloads produced by json.dumps() as they would arrive
+    over SSE. Covers all four combinations of SenseRobot mode × capture flag.
+    """
+    import json
+
+    def js_capture_delay(sse_json_str: str, is_senserobot_mode: bool) -> int:
+        """Python equivalent of the JS delay expression."""
+        e = json.loads(sse_json_str)
+        return 5000 if (is_senserobot_mode and e.get("capture") is True) else 0
+
+    capture_payload    = json.dumps({"type": "quip", "text": "...", "personality": "Cocky", "capture": True})
+    no_capture_payload = json.dumps({"type": "quip", "text": "...", "personality": "Cocky", "capture": False})
+
+    # SenseRobot mode ON, capture move → 5000 ms
+    assert js_capture_delay(capture_payload, True)  == 5000
+
+    # SenseRobot mode ON, non-capture move → 0 ms (immediate)
+    assert js_capture_delay(no_capture_payload, True)  == 0
+
+    # SenseRobot mode OFF, capture move → 0 ms (immediate — no delay outside SenseRobot)
+    assert js_capture_delay(capture_payload, False) == 0
+
+    # SenseRobot mode OFF, non-capture move → 0 ms
+    assert js_capture_delay(no_capture_payload, False) == 0
+
+
+def test_senserobot_client_delays_capture_quip():
+    """
+    Verify senserobot_client.py delays capture quips with time.sleep(5).
+    Checks the source code directly without executing it.
+    """
+    import ast, pathlib
+
+    source = pathlib.Path("senserobot_client.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    # Find the quip branch: look for the time.sleep call near the quip handler
+    sleep_calls = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "sleep"
+        ):
+            # Check that the argument is 5
+            if node.args and isinstance(node.args[0], ast.Constant) and node.args[0].value == 5:
+                sleep_calls.append(node.lineno)
+
+    assert sleep_calls, (
+        "senserobot_client.py must contain time.sleep(5) for the capture delay"
+    )
+
+    # Also verify the capture guard: event.get("capture") is True
+    source_text = source
+    assert 'event.get("capture") is True' in source_text, (
+        'senserobot_client.py must check event.get("capture") is True before sleeping'
+    )
