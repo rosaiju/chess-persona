@@ -372,6 +372,34 @@ async def test_non_capture_quip_has_capture_false(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_ai_check_quip_has_delay_flag(monkeypatch):
+    """AI check move (non-capture) quip must have capture=True so browser delays 5s.
+
+    After 1.e4 g5 2.d4 f5, bot (White) plays Qd1-h5+ — check through the
+    now-open f7 diagonal, no piece captured.
+    """
+    _common_capture_test_patches(monkeypatch)
+
+    async def fake_stream_game(game_id):
+        # 4 half-moves: e2e4 g7g5 d2d4 f7f5 — White to move
+        yield make_gamefull("chesspersonadbot", "human", moves="e2e4 g7g5 d2d4 f7f5")
+
+    async def fake_best_move(engine, board):
+        return chess.Move.from_uci("d1h5")   # Qh5+ — check, no capture
+
+    monkeypatch.setattr(player_module, "stream_game", fake_stream_game)
+    monkeypatch.setattr(player_module, "_best_move", fake_best_move)
+
+    events = await collect_events(play_game("human", color="white"))
+
+    quip_events = [e for e in events if e["type"] == "quip"]
+    delay_quips = [e for e in quip_events if e.get("capture") is True]
+    assert len(delay_quips) >= 1, (
+        f"Expected capture=True on AI check (non-capture) quip, got: {quip_events}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_capture_and_check_uses_capture_flag(monkeypatch):
     """When an AI move is both a capture and gives check, quip has capture=True.
 

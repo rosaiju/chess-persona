@@ -330,34 +330,20 @@ def test_frontend_delay_logic_using_exact_sse_json():
     assert js_capture_delay(no_capture_payload, False) == 0
 
 
-def test_senserobot_client_delays_capture_quip():
+def test_senserobot_client_does_not_speak_quips():
     """
-    Verify senserobot_client.py delays capture quips with time.sleep(5).
-    Checks the source code directly without executing it.
+    Browser is the sole TTS path. The senserobot_client quip handler must NOT
+    call speak() — it should only log.
     """
-    import ast, pathlib
+    import pathlib
 
     source = pathlib.Path("senserobot_client.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
 
-    # Find the quip branch: look for the time.sleep call near the quip handler
-    sleep_calls = []
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "sleep"
-        ):
-            # Check that the argument is 5
-            if node.args and isinstance(node.args[0], ast.Constant) and node.args[0].value == 5:
-                sleep_calls.append(node.lineno)
+    assert 'elif etype == "quip"' in source, "quip handler not found in senserobot_client.py"
 
-    assert sleep_calls, (
-        "senserobot_client.py must contain time.sleep(5) for the capture delay"
-    )
+    # Extract only the quip handler block (between "quip" and "done" branches)
+    quip_section = source.split('elif etype == "quip"')[1].split('elif etype == "done"')[0]
 
-    # Also verify the capture guard: event.get("capture") is True
-    source_text = source
-    assert 'event.get("capture") is True' in source_text, (
-        'senserobot_client.py must check event.get("capture") is True before sleeping'
+    assert "speak(" not in quip_section, (
+        "senserobot_client.py quip handler must not call speak() — browser handles all TTS"
     )

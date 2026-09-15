@@ -306,7 +306,7 @@ async def play_game(
                 if trigger:
                     quip = get_quip(personality, trigger)
                     if quip:
-                        _cap = is_ai_move and is_capture
+                        _cap = is_ai_move and (is_capture or board.is_check())
                         print(f"[{time.strftime('%H:%M:%S')}][QUIP] trigger={trigger} capture={_cap} text={quip[:40]!r}")
                         yield {"type": "quip", "text": quip, "personality": personality, "capture": _cap}
 
@@ -353,8 +353,9 @@ async def play_game(
                 if trigger:
                     quip = get_quip(personality, trigger)
                     if quip:
-                        print(f"[{time.strftime('%H:%M:%S')}][QUIP] trigger={trigger} capture={is_capture} text={quip[:40]!r}")
-                        yield {"type": "quip", "text": quip, "personality": personality, "capture": is_capture}
+                        _cap = is_capture or board.is_check()
+                        print(f"[{time.strftime('%H:%M:%S')}][QUIP] trigger={trigger} capture={_cap} text={quip[:40]!r}")
+                        yield {"type": "quip", "text": quip, "personality": personality, "capture": _cap}
 
                 prev_eval = eval_after
 
