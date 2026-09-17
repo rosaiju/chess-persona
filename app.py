@@ -14,7 +14,8 @@ from fastapi.responses import StreamingResponse, HTMLResponse, Response
 from pydantic import BaseModel
 
 from lichess.player import play_game
-from analytics.db import get_insights, get_game, get_game_moves
+from analytics.db import get_insights, get_game, get_game_moves, get_coaching_review
+from analytics.coaching import generate_review as generate_coaching_review
 from lichess.api import (
     make_human_board_move,
     validate_bot_account,
@@ -141,6 +142,25 @@ async def human_move(req: MoveRequest):
 async def review(game_id: str):
     content = Path("templates/review.html").read_text(encoding="utf-8")
     return HTMLResponse(content=content, headers={"Cache-Control": "no-store, no-cache"})
+
+
+@app.post("/review/{game_id}/coaching")
+async def trigger_coaching(game_id: str):
+    game = await asyncio.to_thread(get_game, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if not game.get("analysis_done"):
+        raise HTTPException(status_code=400, detail="Stockfish analysis not complete yet")
+    existing = await asyncio.to_thread(get_coaching_review, game_id)
+    if existing["done"]:
+        return {"status": "already_done", "review": existing["review"]}
+    asyncio.create_task(generate_coaching_review(game_id))
+    return {"status": "started"}
+
+
+@app.get("/review/{game_id}/coaching")
+async def coaching_status(game_id: str):
+    return await asyncio.to_thread(get_coaching_review, game_id)
 
 
 @app.get("/game/{game_id}")

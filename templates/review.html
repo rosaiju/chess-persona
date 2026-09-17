@@ -304,6 +304,101 @@
     color: var(--text2);
   }
 
+  /* AI Coaching Review card */
+  .coaching-card {
+    margin-top: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .coaching-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+  .coaching-title {
+    font-weight: 700;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .coaching-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: #e9d5ff;
+    color: #6b21a8;
+  }
+  .coaching-generate-btn {
+    padding: 6px 14px;
+    background: #7c3aed;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .coaching-generate-btn:hover { background: #6d28d9; }
+  .coaching-generate-btn:disabled { opacity: 0.55; cursor: default; }
+  .coaching-body {
+    padding: 20px 20px 24px;
+  }
+  .coaching-thinking {
+    padding: 32px;
+    text-align: center;
+    color: var(--text2);
+    font-size: 13px;
+  }
+  .coaching-thinking .dot-pulse::after {
+    content: '…';
+    animation: dots 1.4s infinite;
+  }
+  @keyframes dots {
+    0%,20%  { content: '.'; }
+    40%,60% { content: '..'; }
+    80%,100%{ content: '…'; }
+  }
+  /* Rendered review sections */
+  .coaching-section {
+    margin-bottom: 20px;
+  }
+  .coaching-section:last-child { margin-bottom: 0; }
+  .coaching-section h3 {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text2);
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .coaching-section h3.s-well    { color: #16a34a; border-color: #bbf7d0; }
+  .coaching-section h3.s-mistakes{ color: #dc2626; border-color: #fecaca; }
+  .coaching-section h3.s-patterns{ color: #7c3aed; border-color: #ddd6fe; }
+  .coaching-section h3.s-focus   { color: #0369a1; border-color: #bae6fd; }
+  .coaching-section p {
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .coaching-section p:last-child { margin-bottom: 0; }
+  .coaching-error {
+    padding: 16px 20px;
+    color: #dc2626;
+    font-size: 13px;
+  }
+
   @media (max-width: 640px) {
     .main { flex-direction: column; }
     .board-col { width: 100%; }
@@ -315,6 +410,7 @@
 </style>
 
 <div id="root"><div class="loading">Loading game…</div></div>
+<div id="coaching-root"></div>
 
 <script>
 const gameId = location.pathname.split('/').filter(Boolean).pop();
@@ -559,6 +655,141 @@ function render(game) {
   }
 }
 
+// ── Coaching review ──────────────────────────────────────────────────────────
+
+const SECTION_META = {
+  'Game Summary':         { cls: '',           icon: '♟' },
+  'What You Did Well':    { cls: 's-well',     icon: '✓' },
+  'Key Mistakes':         { cls: 's-mistakes', icon: '✗' },
+  'Patterns I Noticed':   { cls: 's-patterns', icon: '◈' },
+  'Focus for Next Game':  { cls: 's-focus',    icon: '→' },
+};
+
+function renderCoachingText(text) {
+  // Split into sections on ## headings
+  const sections = [];
+  let current = null;
+  for (const line of text.split('\n')) {
+    if (line.startsWith('## ')) {
+      if (current) sections.push(current);
+      current = { heading: line.slice(3).trim(), lines: [] };
+    } else if (current) {
+      current.lines.push(line);
+    }
+  }
+  if (current) sections.push(current);
+
+  if (!sections.length) {
+    // Fallback: render as plain paragraphs if model didn't use expected headers
+    return `<div class="coaching-section"><p>${text.replace(/\n\n/g,'</p><p>').replace(/\n/g,' ')}</p></div>`;
+  }
+
+  return sections.map(s => {
+    const meta = SECTION_META[s.heading] || { cls: '', icon: '' };
+    const body = s.lines
+      .join('\n')
+      .trim()
+      .split(/\n\n+/)
+      .filter(p => p.trim())
+      .map(p => `<p>${p.replace(/\n/g, ' ')}</p>`)
+      .join('');
+    return `<div class="coaching-section">
+      <h3 class="${meta.cls}">${meta.icon ? meta.icon + ' ' : ''}${s.heading}</h3>
+      ${body}
+    </div>`;
+  }).join('');
+}
+
+let coachingPollTimer = null;
+
+function renderCoachingCard(game, state) {
+  const root = document.getElementById('coaching-root');
+  if (!root) return;
+
+  // Don't show card if Stockfish analysis hasn't run yet
+  if (!game.analysis_done) {
+    root.innerHTML = '';
+    return;
+  }
+
+  let bodyHtml = '';
+  let btnHtml = '';
+
+  if (state === 'idle') {
+    bodyHtml = '';
+    btnHtml = `<button class="coaching-generate-btn" id="coachingBtn">Generate AI Review</button>`;
+  } else if (state === 'loading') {
+    bodyHtml = `<div class="coaching-thinking">Generating coaching review<span class="dot-pulse"></span></div>`;
+    btnHtml = `<button class="coaching-generate-btn" disabled>Generating…</button>`;
+  } else if (state === 'error') {
+    bodyHtml = `<div class="coaching-error">Failed to generate review. Check that ANTHROPIC_API_KEY is set and try again.</div>`;
+    btnHtml = `<button class="coaching-generate-btn" id="coachingBtn">Retry</button>`;
+  } else if (typeof state === 'string' && state.startsWith('## ')) {
+    // state is the review text
+    bodyHtml = `<div class="coaching-body">${renderCoachingText(state)}</div>`;
+    btnHtml = '';
+  }
+
+  root.innerHTML = `<div class="coaching-card">
+    <div class="coaching-header">
+      <div class="coaching-title">
+        ✦ AI Coaching Review
+        <span class="coaching-badge">Claude</span>
+      </div>
+      ${btnHtml}
+    </div>
+    ${bodyHtml}
+  </div>`;
+
+  const btn = document.getElementById('coachingBtn');
+  if (btn) btn.onclick = () => triggerCoaching(game);
+}
+
+async function pollCoaching(game) {
+  try {
+    const resp = await fetch(`/review/${gameId}/coaching`);
+    const data = await resp.json();
+    if (data.done && data.review) {
+      clearTimeout(coachingPollTimer);
+      renderCoachingCard(game, data.review);
+    } else {
+      coachingPollTimer = setTimeout(() => pollCoaching(game), 2000);
+    }
+  } catch {
+    clearTimeout(coachingPollTimer);
+    renderCoachingCard(game, 'error');
+  }
+}
+
+async function triggerCoaching(game) {
+  renderCoachingCard(game, 'loading');
+  try {
+    const resp = await fetch(`/review/${gameId}/coaching`, { method: 'POST' });
+    const data = await resp.json();
+    if (data.status === 'already_done' && data.review) {
+      renderCoachingCard(game, data.review);
+    } else {
+      pollCoaching(game);
+    }
+  } catch {
+    renderCoachingCard(game, 'error');
+  }
+}
+
+function initCoaching(game) {
+  if (!game.analysis_done) {
+    document.getElementById('coaching-root').innerHTML = '';
+    return;
+  }
+  if (game.ai_review_done && game.ai_review) {
+    renderCoachingCard(game, game.ai_review);
+  } else {
+    renderCoachingCard(game, 'idle');
+  }
+}
+
+// ── Main init ────────────────────────────────────────────────────────────────
+
 async function init() {
   try {
     const resp = await fetch(`/game/${gameId}`);
@@ -566,6 +797,7 @@ async function init() {
     const data = await resp.json();
     moves = data.moves || [];
     render(data.game);
+    initCoaching(data.game);
   } catch (e) {
     document.getElementById('root').innerHTML =
       `<div class="fallback"><strong>Error loading game</strong>${e.message}</div>`;

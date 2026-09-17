@@ -67,6 +67,8 @@ def migrate_db():
             ("analysis_done",  "INTEGER DEFAULT 0"),
             ("accuracy_human", "REAL"),
             ("accuracy_ai",    "REAL"),
+            ("ai_review",      "TEXT"),
+            ("ai_review_done", "INTEGER DEFAULT 0"),
         ]:
             _add_col(con, "games", col, typ)
 
@@ -239,3 +241,21 @@ def get_insights(opponent: str | None = None) -> dict:
         "blunder_squares": [{"square": sq, "count": cnt} for sq, cnt in top_squares],
         "recent_games":    recent,
     }
+
+
+def get_coaching_review(game_id: str) -> dict:
+    with _conn() as con:
+        row = con.execute(
+            "SELECT ai_review, ai_review_done FROM games WHERE game_id = ?", (game_id,)
+        ).fetchone()
+        if not row:
+            return {"done": False, "review": None}
+        return {"done": bool(row["ai_review_done"]), "review": row["ai_review"]}
+
+
+def save_coaching_review(game_id: str, review: str):
+    with _conn() as con:
+        con.execute(
+            "UPDATE games SET ai_review = ?, ai_review_done = 1 WHERE game_id = ?",
+            (review, game_id),
+        )

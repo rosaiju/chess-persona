@@ -4,6 +4,7 @@ python-chess
 httpx
 python-dotenv
 edge-tts
+anthropic
 
 # test dependencies
 pytest>=8.0
