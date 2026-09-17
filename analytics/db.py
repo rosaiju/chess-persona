@@ -210,14 +210,17 @@ def get_insights(opponent: str | None = None) -> dict:
         gid = g["game_id"]
         gm = [m for m in moves_rows if m["game_id"] == gid and not m["is_ai_move"]]
         recent.append({
-            "game_id":    gid,
-            "opponent":   g["opponent"],
-            "result":     g["human_result"],
-            "blunders":   sum(1 for m in gm if m["trigger"] == "human_blunders"),
-            "mistakes":   sum(1 for m in gm if m["trigger"] == "human_mistake"),
-            "good_moves": sum(1 for m in gm if m["trigger"] == "human_good_move"),
-            "played_at":  g["played_at"],
-            "url":        f"https://lichess.org/{gid}",
+            "game_id":        gid,
+            "opponent":       g["opponent"],
+            "result":         g["human_result"],
+            "blunders":       sum(1 for m in gm if m["trigger"] == "human_blunders"),
+            "mistakes":       sum(1 for m in gm if m["trigger"] == "human_mistake"),
+            "good_moves":     sum(1 for m in gm if m["trigger"] == "human_good_move"),
+            "played_at":      g["played_at"],
+            "url":            f"https://lichess.org/{gid}",
+            "accuracy_human": g["accuracy_human"],
+            "accuracy_ai":    g["accuracy_ai"],
+            "analysis_done":  g["analysis_done"],
         })
 
     return {

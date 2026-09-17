@@ -319,8 +319,8 @@
     /* Recent games */
     .ins-recent { display: flex; flex-direction: column; gap: 2px; }
     .ins-recent-row {
-      display: grid; grid-template-columns: 76px 24px 1fr auto;
-      align-items: center; gap: 10px;
+      display: grid; grid-template-columns: 68px 22px 1fr auto auto;
+      align-items: center; gap: 8px;
       padding: 7px 10px; background: #111; border-radius: 6px;
       font-size: 0.74rem;
     }
@@ -330,8 +330,13 @@
     .rr-res.loss { color: #f87171; }
     .rr-res.draw { color: #fbbf24; }
     .rr-stats { color: #4a4a4a; }
-    .rr-link a { color: #2563eb; text-decoration: none; font-size: 0.68rem; opacity: 0.7; }
-    .rr-link a:hover { opacity: 1; text-decoration: underline; }
+    .rr-acc { font-size: 0.68rem; color: #555; white-space: nowrap; }
+    .rr-acc span { color: #3b82f6; font-weight: 600; }
+    .rr-links { display: flex; gap: 6px; }
+    .rr-links a { text-decoration: none; font-size: 0.65rem; opacity: 0.6; white-space: nowrap; }
+    .rr-links a:hover { opacity: 1; text-decoration: underline; }
+    .rr-links .review-link { color: #a855f7; }
+    .rr-links .lichess-link { color: #2563eb; }
 
     @media (max-width: 700px) {
       .main { flex-direction: column; }
@@ -986,11 +991,17 @@
       const resLabel = g.result === 'win' ? 'W' : g.result === 'loss' ? 'L' : 'D';
       const resClass = g.result || 'draw';
       const stats    = `${g.blunders}B · ${g.mistakes}M`;
+      const accHtml  = g.analysis_done && g.accuracy_human != null
+        ? `<span class="rr-acc"><span>${g.accuracy_human}%</span> acc</span>`
+        : `<span class="rr-acc" style="color:#222">—</span>`;
+      const reviewLink = `<a class="review-link" href="/review/${g.game_id}">Review ↗</a>`;
+      const lichessLink = `<a class="lichess-link" href="${g.url}" target="_blank" rel="noreferrer">Lichess ↗</a>`;
       return `<div class="ins-recent-row">
         <span class="rr-date">${date}</span>
         <span class="rr-res ${resClass}">${resLabel}</span>
         <span class="rr-stats">${stats}</span>
-        <span class="rr-link"><a href="${g.url}" target="_blank" rel="noreferrer">Lichess ↗</a></span>
+        ${accHtml}
+        <span class="rr-links">${reviewLink} ${lichessLink}</span>
       </div>`;
     }).join('') || `<div style="padding:8px 10px;background:#111;border-radius:6px;font-size:0.75rem;color:#333">No completed games yet.</div>`;
 

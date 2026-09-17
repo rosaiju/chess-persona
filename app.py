@@ -137,6 +137,12 @@ async def human_move(req: MoveRequest):
     return {"ok": True}
 
 
+@app.get("/review/{game_id}", response_class=HTMLResponse)
+async def review(game_id: str):
+    content = Path("templates/review.html").read_text(encoding="utf-8")
+    return HTMLResponse(content=content, headers={"Cache-Control": "no-store, no-cache"})
+
+
 @app.get("/game/{game_id}")
 async def game_data(game_id: str):
     game = await asyncio.to_thread(get_game, game_id)

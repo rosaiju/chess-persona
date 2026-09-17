@@ -1,0 +1,576 @@
+<title>Game Review</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --surface: #ffffff;
+    --surface2: #f0ede8;
+    --border: #e0dbd4;
+    --text: #1a1a1a;
+    --text2: #666;
+    --accent: #2c7a3e;
+    --sq-light: #f0d9b5;
+    --sq-dark: #b58863;
+    --sq-hover: rgba(255,255,0,0.35);
+    --sq-active: rgba(255,255,0,0.55);
+    --badge-blunder: #e63946;
+    --badge-mistake: #f4803a;
+    --badge-inaccuracy: #f0c040;
+    --badge-good: #2c7a3e;
+    --badge-excellent: #1d6b47;
+    --eval-white: #f8f8f8;
+    --eval-black: #222;
+    --acc-human: #2c7a3e;
+    --acc-ai: #1a5fb4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1a1a1a;
+      --surface: #252525;
+      --surface2: #2e2e2e;
+      --border: #3a3a3a;
+      --text: #e8e8e0;
+      --text2: #999;
+      --sq-light: #d9b58a;
+      --sq-dark: #8a6340;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1a1a1a;
+    --surface: #252525;
+    --surface2: #2e2e2e;
+    --border: #3a3a3a;
+    --text: #e8e8e0;
+    --text2: #999;
+    --sq-light: #d9b58a;
+    --sq-dark: #8a6340;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+    padding: 16px;
+  }
+
+  /* Header */
+  .hdr {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .back-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .back-btn:hover { border-color: var(--accent); }
+  .hdr-info { flex: 1; min-width: 0; }
+  .hdr-players {
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .hdr-result {
+    font-size: 13px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+  .hdr-result.win  { background: #d4edda; color: #155724; border-color: #c3e6cb; }
+  .hdr-result.loss { background: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+  .hdr-result.draw { background: var(--surface2); }
+  .hdr-date { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+  /* Accuracy pills */
+  .acc-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+  }
+  .acc-pill {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid transparent;
+  }
+  .acc-pill.human { background: #e8f5e9; color: #1b5e20; border-color: #a5d6a7; }
+  .acc-pill.ai    { background: #e3f2fd; color: #0d47a1; border-color: #90caf9; }
+
+  /* Fallback banner */
+  .fallback {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 32px;
+    text-align: center;
+    color: var(--text2);
+    margin-top: 8px;
+  }
+  .fallback strong { display: block; font-size: 16px; color: var(--text); margin-bottom: 8px; }
+
+  /* Main layout */
+  .main {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  /* Board column */
+  .board-col {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    align-items: flex-start;
+  }
+
+  /* Eval bar */
+  .eval-bar-wrap {
+    width: 16px;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: var(--eval-black);
+    position: relative;
+    flex-shrink: 0;
+  }
+  .eval-bar-white {
+    background: var(--eval-white);
+    width: 100%;
+    transition: height 0.25s ease;
+  }
+  .eval-score {
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    font-weight: 700;
+    color: #888;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    white-space: nowrap;
+  }
+
+  /* Board */
+  .board-wrap { display: flex; flex-direction: column; gap: 4px; }
+  .board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    border: 2px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    user-select: none;
+  }
+  .sq {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(18px, 4vw, 40px);
+    cursor: default;
+    position: relative;
+  }
+  .sq.light { background: var(--sq-light); }
+  .sq.dark  { background: var(--sq-dark); }
+  .sq.active { box-shadow: inset 0 0 0 3px rgba(255,200,0,0.8); }
+  .sq.highlight { box-shadow: inset 0 0 0 3px rgba(0,180,100,0.5); }
+  .sq-label {
+    position: absolute;
+    font-size: 9px;
+    font-weight: 600;
+    opacity: 0.5;
+    line-height: 1;
+  }
+  .sq-label.file { bottom: 1px; right: 2px; }
+  .sq-label.rank { top: 1px; left: 2px; }
+
+  /* Nav controls */
+  .nav-row {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+  }
+  .nav-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .nav-btn:hover { border-color: var(--accent); }
+  .nav-btn:disabled { opacity: 0.4; cursor: default; }
+
+  /* Move list panel */
+  .moves-panel {
+    flex: 1;
+    min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .moves-header {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text2);
+    background: var(--surface2);
+  }
+  .moves-list {
+    overflow-y: auto;
+    flex: 1;
+    max-height: 520px;
+  }
+  .move-pair {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+  .move-num {
+    width: 32px;
+    padding: 6px 4px 6px 10px;
+    color: var(--text2);
+    font-size: 12px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    background: var(--surface2);
+  }
+  .move-cell {
+    flex: 1;
+    padding: 5px 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    border-left: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  .move-cell:hover { background: var(--surface2); }
+  .move-cell.active { background: #e8f5e9; }
+  :root[data-theme="dark"] .move-cell.active,
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .move-cell.active { background: #1a3a25; } }
+  .move-san { font-weight: 600; font-size: 13px; font-family: monospace; }
+  .move-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .badge-blunder    { background: #fde8ea; color: var(--badge-blunder); }
+  .badge-mistake    { background: #fef0e6; color: var(--badge-mistake); }
+  .badge-inaccuracy { background: #fef9e6; color: #8a6000; }
+  .badge-good       { background: #e8f5e9; color: var(--badge-good); }
+  .badge-excellent  { background: #e0f2e9; color: var(--badge-excellent); }
+  .move-loss {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text2);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .move-loss.bad { color: var(--badge-blunder); }
+  .move-loss.warn { color: var(--badge-mistake); }
+
+  /* Loading */
+  .loading {
+    padding: 48px;
+    text-align: center;
+    color: var(--text2);
+  }
+
+  @media (max-width: 640px) {
+    .main { flex-direction: column; }
+    .board-col { width: 100%; }
+    .board-wrap { width: 100%; }
+    .board { width: 100%; }
+    .moves-list { max-height: 320px; }
+    .eval-bar-wrap { display: none; }
+  }
+</style>
+
+<div id="root"><div class="loading">Loading game…</div></div>
+
+<script>
+const gameId = location.pathname.split('/').filter(Boolean).pop();
+
+const PIECES = {
+  K:'♔', Q:'♕', R:'♖', B:'♗', N:'♘', P:'♙',
+  k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟',
+};
+
+function fenToGrid(fen) {
+  const grid = [];
+  for (const row of fen.split(' ')[0].split('/')) {
+    const line = [];
+    for (const ch of row) {
+      if (ch >= '1' && ch <= '8') for (let i = 0; i < +ch; i++) line.push(null);
+      else line.push(ch);
+    }
+    grid.push(line);
+  }
+  return grid; // [0] = rank 8, [7] = rank 1 (white's view)
+}
+
+function evalPercent(cpWhite) {
+  if (cpWhite == null) return 50;
+  if (cpWhite >= 10000) return 97;
+  if (cpWhite <= -10000) return 3;
+  return 50 + (Math.max(-800, Math.min(800, cpWhite)) / 800) * 44;
+}
+
+function evalLabel(cpWhite) {
+  if (cpWhite == null) return '';
+  if (Math.abs(cpWhite) >= 10000) return cpWhite > 0 ? 'M' : '-M';
+  return (cpWhite >= 0 ? '+' : '') + (cpWhite / 100).toFixed(1);
+}
+
+function classifyMove(m) {
+  if (m.cp_loss == null) return null;
+  if (m.cp_loss === 0)    return { label: '!', cls: 'excellent',  title: 'Best move' };
+  if (m.cp_loss <= 25)    return { label: '✓', cls: 'excellent',  title: 'Excellent' };
+  if (m.cp_loss <= 75)    return { label: '⁇', cls: 'inaccuracy', title: `Inaccuracy (−${m.cp_loss}cp)` };
+  if (m.cp_loss <= 200)   return { label: '?', cls: 'mistake',    title: `Mistake (−${m.cp_loss}cp)` };
+  return                         { label: '??', cls: 'blunder',   title: `Blunder (−${m.cp_loss}cp)` };
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' }); }
+  catch { return iso.slice(0, 10); }
+}
+
+function resultLabel(game) {
+  const r = game.result;
+  if (!r) return '?';
+  if (r === '1/2-1/2') return '½–½';
+  if (r === '1-0') return '1–0';
+  if (r === '0-1') return '0–1';
+  return r;
+}
+
+function humanResultClass(game) {
+  return { win: 'win', loss: 'loss', draw: 'draw' }[game.human_result] || '';
+}
+
+// State
+let moves = [];
+let currentPly = 0; // 0 = starting position, 1 = after move 1, etc.
+
+function buildBoard(fen, lastMove) {
+  const grid = fenToGrid(fen);
+  let html = '';
+  for (let r = 0; r < 8; r++) {
+    for (let f = 0; f < 8; f++) {
+      const isLight = (r + f) % 2 === 0;
+      const piece = grid[r][f];
+      const sq = String.fromCharCode(97 + f) + (8 - r);
+      let extra = '';
+      if (lastMove) {
+        if (sq === lastMove.slice(0, 2) || sq === lastMove.slice(2, 4)) extra = ' active';
+      }
+      const fileLabel = r === 7 ? `<span class="sq-label file">${String.fromCharCode(97+f)}</span>` : '';
+      const rankLabel = f === 0 ? `<span class="sq-label rank">${8-r}</span>` : '';
+      html += `<div class="sq ${isLight?'light':'dark'}${extra}" data-sq="${sq}">${rankLabel}${fileLabel}${piece ? PIECES[piece] || '' : ''}</div>`;
+    }
+  }
+  return html;
+}
+
+function render(game) {
+  const canReview = game.analysis_done && moves.length > 0 && moves[0].fen_after != null;
+  const hasFens = moves.length > 0 && moves[0].fen_after != null;
+
+  const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  const displayFen = currentPly === 0 ? startFen : moves[currentPly - 1].fen_after;
+  const lastMove = currentPly === 0 ? null : moves[currentPly - 1].uci;
+  const currentCpWhite = currentPly === 0 ? 0 : (moves[currentPly - 1].cp_white ?? 0);
+  const pct = evalPercent(currentCpWhite);
+  const evalBarHeight = Math.max(3, Math.min(97, pct));
+
+  // Build move list rows
+  let movesHtml = '';
+  const pairs = [];
+  for (let i = 0; i < moves.length; i += 2) {
+    pairs.push([moves[i], moves[i + 1] || null]);
+  }
+  pairs.forEach(([w, b], idx) => {
+    const wPly = w.ply;
+    const bPly = b ? b.ply : null;
+    const wBadge = canReview ? classifyMove(w) : null;
+    const bBadge = canReview && b ? classifyMove(b) : null;
+    const moveNum = Math.ceil(wPly / 2);
+
+    function cellHtml(m, badge) {
+      if (!m) return '<div class="move-cell" style="flex:1;border-left:1px solid var(--border)"></div>';
+      const san = m.san || m.uci;
+      const isActive = m.ply === currentPly;
+      const lossClass = m.cp_loss != null && m.cp_loss > 200 ? 'bad' : m.cp_loss != null && m.cp_loss > 75 ? 'warn' : '';
+      const lossStr = canReview && m.cp_loss != null && m.cp_loss > 0 ? `−${m.cp_loss}` : '';
+      const badgeHtml = badge ? `<span class="move-badge badge-${badge.cls}" title="${badge.title}">${badge.label}</span>` : '';
+      return `<div class="move-cell${isActive?' active':''}" data-ply="${m.ply}">
+        <span class="move-san">${san}</span>${badgeHtml}
+        ${lossStr ? `<span class="move-loss ${lossClass}">${lossStr}</span>` : ''}
+      </div>`;
+    }
+
+    movesHtml += `<div class="move-pair">
+      <span class="move-num">${moveNum}.</span>
+      ${cellHtml(w, wBadge)}${cellHtml(b, bBadge)}
+    </div>`;
+  });
+
+  const whitePlayer = game.ai_color === 'white' ? 'AI (chesspersonadbot)' : game.opponent;
+  const blackPlayer = game.ai_color === 'black' ? 'AI (chesspersonadbot)' : game.opponent;
+
+  const accHtml = game.analysis_done ? `
+    <div class="acc-row">
+      <span class="acc-pill human" title="Lichess v2 accuracy formula">Human ${game.accuracy_human ?? '—'}%</span>
+      <span class="acc-pill ai">AI ${game.accuracy_ai ?? '—'}%</span>
+    </div>` : '';
+
+  const fallbackBanner = !hasFens ? `
+    <div class="fallback">
+      <strong>Detailed analysis unavailable for this older game.</strong>
+      Move history was recorded but position data is missing — only the move list is shown.
+    </div>` : '';
+
+  const evalBarHtml = hasFens ? `
+    <div class="eval-bar-wrap" id="evalBar" style="height:${document.querySelector('.board')?.offsetWidth || 400}px">
+      <div class="eval-bar-white" id="evalFill" style="height:${evalBarHeight}%"></div>
+    </div>` : '';
+
+  const boardHtml = hasFens ? `
+    <div class="board-wrap">
+      <div class="board" id="board">${buildBoard(displayFen, lastMove)}</div>
+      <div class="nav-row">
+        <button class="nav-btn" id="navFirst" title="Start">⏮</button>
+        <button class="nav-btn" id="navPrev"  title="Previous">◀</button>
+        <button class="nav-btn" id="navNext"  title="Next">▶</button>
+        <button class="nav-btn" id="navLast"  title="End">⏭</button>
+      </div>
+    </div>` : '';
+
+  document.getElementById('root').innerHTML = `
+    <div class="hdr">
+      <a href="/" class="back-btn">← Back</a>
+      <div class="hdr-info">
+        <div class="hdr-players">
+          <span>♔ ${whitePlayer}</span>
+          <span style="color:var(--text2)">vs</span>
+          <span>♚ ${blackPlayer}</span>
+          <span class="hdr-result ${humanResultClass(game)}">${resultLabel(game)}</span>
+        </div>
+        <div class="hdr-date">${formatDate(game.played_at)} · ${game.personality} personality · ${game.total_plies ?? '?'} moves</div>
+        ${accHtml}
+      </div>
+    </div>
+    ${fallbackBanner}
+    ${hasFens ? `<div class="main">
+      <div class="board-col">
+        ${evalBarHtml}
+        ${boardHtml}
+      </div>
+      <div class="moves-panel">
+        <div class="moves-header">Moves</div>
+        <div class="moves-list" id="movesList">${movesHtml}</div>
+      </div>
+    </div>` : `<div class="moves-panel" style="margin-top:12px">
+      <div class="moves-header">Moves</div>
+      <div class="moves-list" id="movesList">${movesHtml}</div>
+    </div>`}
+  `;
+
+  // Wire navigation
+  if (hasFens) {
+    const setEvalBar = (pct) => {
+      const fill = document.getElementById('evalFill');
+      if (fill) fill.style.height = pct + '%';
+    };
+
+    function goTo(ply) {
+      currentPly = Math.max(0, Math.min(moves.length, ply));
+      const fen = currentPly === 0 ? startFen : moves[currentPly - 1].fen_after;
+      const lm = currentPly === 0 ? null : moves[currentPly - 1].uci;
+      const cp = currentPly === 0 ? 0 : (moves[currentPly - 1].cp_white ?? 0);
+      document.getElementById('board').innerHTML = buildBoard(fen, lm);
+      setEvalBar(evalPercent(cp));
+      // Update active move
+      document.querySelectorAll('.move-cell').forEach(el => {
+        el.classList.toggle('active', +el.dataset.ply === currentPly);
+      });
+      // Scroll active into view
+      const active = document.querySelector('.move-cell.active');
+      if (active) active.scrollIntoView({ block: 'nearest' });
+    }
+
+    // Size eval bar to match board height
+    const boardEl = document.getElementById('board');
+    const barEl = document.getElementById('evalBar');
+    if (boardEl && barEl) {
+      const ro = new ResizeObserver(() => barEl.style.height = boardEl.offsetWidth + 'px');
+      ro.observe(boardEl);
+      barEl.style.height = boardEl.offsetWidth + 'px';
+    }
+    setEvalBar(evalBarHeight);
+
+    document.getElementById('navFirst').onclick = () => goTo(0);
+    document.getElementById('navPrev').onclick  = () => goTo(currentPly - 1);
+    document.getElementById('navNext').onclick  = () => goTo(currentPly + 1);
+    document.getElementById('navLast').onclick  = () => goTo(moves.length);
+
+    document.getElementById('movesList').addEventListener('click', e => {
+      const cell = e.target.closest('.move-cell[data-ply]');
+      if (cell) goTo(+cell.dataset.ply);
+    });
+
+    // Keyboard navigation
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); goTo(currentPly - 1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); goTo(currentPly + 1); }
+      if (e.key === 'Home')       { e.preventDefault(); goTo(0); }
+      if (e.key === 'End')        { e.preventDefault(); goTo(moves.length); }
+    });
+  }
+}
+
+async function init() {
+  try {
+    const resp = await fetch(`/game/${gameId}`);
+    if (!resp.ok) throw new Error(`Game not found (${resp.status})`);
+    const data = await resp.json();
+    moves = data.moves || [];
+    render(data.game);
+  } catch (e) {
+    document.getElementById('root').innerHTML =
+      `<div class="fallback"><strong>Error loading game</strong>${e.message}</div>`;
+  }
+}
+
+init();
+</script>
