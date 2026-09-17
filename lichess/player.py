@@ -19,6 +19,7 @@ from lichess.api import (
 )
 from persona.personality import get_quip
 from analytics.db import record_game_start, record_move, record_game_end
+from analytics.analysis import analyze_game
 
 STOCKFISH_PATH = (
     shutil.which("stockfish")
@@ -269,6 +270,7 @@ async def play_game(
                 if quip:
                     yield {"type": "quip", "text": quip, "personality": personality, "capture": False}
                 record_game_end(game_id, final_board.result(), len(server_moves))
+                asyncio.create_task(analyze_game(game_id))
                 yield {
                     "type": "done",
                     "status": status,
@@ -287,6 +289,7 @@ async def play_game(
                 board_before = board.copy()
                 is_ai_move = (board.turn == ai_side)
                 is_capture = board_before.is_capture(move)
+                san = board_before.san(move)
 
                 eval_before = prev_eval
                 board.push(move)
@@ -307,7 +310,8 @@ async def play_game(
                 ):
                     last_positional_at = total_moves
 
-                record_move(game_id, total_moves, uci, eval_before, eval_after,
+                record_move(game_id, total_moves, uci, san, board.fen(),
+                            eval_before, eval_after, raw,
                             trigger, is_ai_move, is_capture, board.is_check())
 
                 if trigger:
@@ -331,6 +335,7 @@ async def play_game(
                 is_capture = board.is_capture(move)
                 board_before = board.copy()
                 eval_before = prev_eval
+                san = board_before.san(move)
 
                 print(f"[{time.strftime('%H:%M:%S')}][DEBUG] Calling make_move({game_id}, {move.uci()})")
                 try:
@@ -357,7 +362,8 @@ async def play_game(
                 if trigger and trigger in ("robot_winning", "endgame"):
                     last_positional_at = total_moves
 
-                record_move(game_id, total_moves, move.uci(), eval_before, eval_after,
+                record_move(game_id, total_moves, move.uci(), san, board.fen(),
+                            eval_before, eval_after, raw,
                             trigger, True, is_capture, board.is_check())
 
                 if trigger:
@@ -383,6 +389,7 @@ async def play_game(
                     if quip:
                         yield {"type": "quip", "text": quip, "personality": personality, "capture": False}
                     record_game_end(game_id, board.result(), total_moves)
+                    asyncio.create_task(analyze_game(game_id))
                     yield {
                         "type": "done",
                         "status": "mate",

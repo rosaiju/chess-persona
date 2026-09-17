@@ -44,7 +44,35 @@ def init_db():
         """)
 
 
+def _add_col(con, table: str, column: str, col_type: str):
+    existing = {row[1] for row in con.execute(f"PRAGMA table_info({table})")}
+    if column not in existing:
+        con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+
+
+def migrate_db():
+    """Add new columns to existing tables. Safe to run on any existing DB."""
+    with _conn() as con:
+        for col, typ in [
+            ("san",       "TEXT"),
+            ("fen_after", "TEXT"),
+            ("cp_white",  "INTEGER"),   # centipawns from White's perspective
+            ("best_uci",  "TEXT"),      # Stockfish best move (filled by post-game analysis)
+            ("cp_loss",   "INTEGER"),   # centipawn loss for moving player (filled by analysis)
+        ]:
+            _add_col(con, "moves", col, typ)
+
+        for col, typ in [
+            ("pgn",            "TEXT"),
+            ("analysis_done",  "INTEGER DEFAULT 0"),
+            ("accuracy_human", "REAL"),
+            ("accuracy_ai",    "REAL"),
+        ]:
+            _add_col(con, "games", col, typ)
+
+
 init_db()
+migrate_db()
 
 
 def _phase(ply: int) -> str:
@@ -70,8 +98,11 @@ def record_move(
     game_id: str,
     ply: int,
     uci: str,
+    san: "str | None",
+    fen_after: "str | None",
     eval_before,
     eval_after,
+    cp_white,           # raw centipawns from White's perspective (eval_after before negation)
     trigger,
     is_ai_move: bool,
     is_capture: bool,
@@ -80,11 +111,11 @@ def record_move(
     with _conn() as con:
         con.execute(
             """INSERT INTO moves
-               (game_id, ply, uci, eval_before, eval_after, trigger,
-                is_ai_move, is_capture, gives_check, phase)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (game_id, ply, uci, eval_before, eval_after, trigger,
-             int(is_ai_move), int(is_capture), int(gives_check), _phase(ply)),
+               (game_id, ply, uci, san, fen_after, eval_before, eval_after, cp_white,
+                trigger, is_ai_move, is_capture, gives_check, phase)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (game_id, ply, uci, san, fen_after, eval_before, eval_after, cp_white,
+             trigger, int(is_ai_move), int(is_capture), int(gives_check), _phase(ply)),
         )
 
 
@@ -110,6 +141,22 @@ def record_game_end(game_id: str, result: str, total_plies: int):
                WHERE game_id = ?""",
             (result, human_result, total_plies, game_id),
         )
+
+
+def get_game(game_id: str) -> dict | None:
+    with _conn() as con:
+        row = con.execute("SELECT * FROM games WHERE game_id = ?", (game_id,)).fetchone()
+        if not row:
+            return None
+        return dict(row)
+
+
+def get_game_moves(game_id: str) -> list[dict]:
+    with _conn() as con:
+        rows = con.execute(
+            "SELECT * FROM moves WHERE game_id = ? ORDER BY ply", (game_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def get_insights(opponent: str | None = None) -> dict:
