@@ -1,10 +1,16 @@
 import asyncio
 import logging
+import os
 import random
 import shutil
 import time
 import chess
 import chess.engine
+
+# Seconds to wait after submitting an AI move before speaking the quip.
+# Gives the SenseRobot arm time to physically complete the move.
+# Override via ROBOT_MOVE_DELAY env var (set to 0 to disable).
+ROBOT_MOVE_DELAY = float(os.getenv("ROBOT_MOVE_DELAY", "7"))
 
 log = logging.getLogger(__name__)
 
@@ -370,6 +376,8 @@ async def play_game(
                     quip = get_quip(personality, trigger)
                     if quip:
                         _cap = is_capture or board.is_check()
+                        if ROBOT_MOVE_DELAY > 0:
+                            await asyncio.sleep(ROBOT_MOVE_DELAY)
                         print(f"[{time.strftime('%H:%M:%S')}][QUIP] trigger={trigger} capture={_cap} text={quip[:40]!r}")
                         yield {"type": "quip", "text": quip, "personality": personality, "capture": _cap}
 
