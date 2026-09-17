@@ -9,6 +9,7 @@ not present in the data.
 import asyncio
 import logging
 import os
+import time
 
 from google import genai
 from google.genai import types as genai_types
@@ -20,6 +21,10 @@ from analytics.db import _conn, save_coaching_review
 log = logging.getLogger(__name__)
 
 MODEL = "gemini-3.6-flash"
+
+# Tracks active generation calls: game_id → wall-clock start time.
+# Used only for diagnostic logging — to detect concurrent duplicate calls.
+_active_reviews: dict[str, float] = {}
 
 _PROMPT_TEMPLATE = """\
 You are a chess coach writing a post-game review for an amateur player.
@@ -144,27 +149,62 @@ PGN (for context only — do not derive new evaluations from this):
 
 
 def _generate_sync(game_id: str):
-    prompt = _build_prompt(game_id)
-    if not prompt:
-        log.warning("coaching: cannot build prompt for %s — no data", game_id)
-        return
+    t0 = time.monotonic()
 
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        log.error("coaching: GEMINI_API_KEY not set")
-        return
+    # Detect duplicate concurrent calls for the same game.
+    if game_id in _active_reviews:
+        prior_age = t0 - _active_reviews[game_id]
+        log.warning(
+            "[coaching] %s: DUPLICATE _generate_sync — another call has been "
+            "active for %.1fs. Two Gemini requests will now run concurrently.",
+            game_id, prior_age,
+        )
+    _active_reviews[game_id] = t0
+    log.info("[coaching] %s: generation started (active calls: %d)", game_id, len(_active_reviews))
 
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=genai_types.GenerateContentConfig(
-            automatic_function_calling=genai_types.AutomaticFunctionCallingConfig(disable=True),
-        ),
-    )
-    review_text = response.text.strip()
-    save_coaching_review(game_id, review_text)
-    log.info("coaching review saved for game %s", game_id)
+    try:
+        prompt = _build_prompt(game_id)
+        if not prompt:
+            log.warning("[coaching] %s: cannot build prompt — no data", game_id)
+            return
+        log.info("[coaching] %s: prompt built in %.3fs (%d chars)", game_id, time.monotonic() - t0, len(prompt))
+
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            log.error("[coaching] %s: GEMINI_API_KEY not set", game_id)
+            return
+
+        t_api = time.monotonic()
+        log.info("[coaching] %s: sending request to Gemini (model=%s)", game_id, MODEL)
+
+        # 120-second timeout prevents a hung free-tier request from waiting forever.
+        # The SDK's HttpOptions.timeout is in milliseconds.
+        client = genai.Client(
+            api_key=api_key,
+            http_options=genai_types.HttpOptions(timeout=120_000),
+        )
+        response = client.models.generate_content(
+            model=MODEL,
+            contents=prompt,
+            config=genai_types.GenerateContentConfig(
+                automatic_function_calling=genai_types.AutomaticFunctionCallingConfig(disable=True),
+            ),
+        )
+        review_text = response.text.strip()
+        t_api_done = time.monotonic()
+        log.info(
+            "[coaching] %s: Gemini responded in %.2fs (%d chars)",
+            game_id, t_api_done - t_api, len(review_text),
+        )
+
+        t_db = time.monotonic()
+        save_coaching_review(game_id, review_text)
+        log.info(
+            "[coaching] %s: saved to DB in %.3fs — total elapsed %.2fs",
+            game_id, time.monotonic() - t_db, time.monotonic() - t0,
+        )
+    finally:
+        _active_reviews.pop(game_id, None)
 
 
 async def generate_review(game_id: str):

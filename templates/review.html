@@ -448,6 +448,7 @@ function evalLabel(cpWhite) {
 
 function classifyMove(m) {
   if (m.cp_loss == null) return null;
+  if (m.cp_loss >= 10000) return { label: '??', cls: 'blunder', title: 'Blunder (allowed or missed checkmate)' };
   if (m.cp_loss === 0)    return { label: '!', cls: 'excellent',  title: 'Best move' };
   if (m.cp_loss <= 25)    return { label: '✓', cls: 'excellent',  title: 'Excellent' };
   if (m.cp_loss <= 75)    return { label: '⁇', cls: 'inaccuracy', title: `Inaccuracy (−${m.cp_loss}cp)` };
@@ -527,7 +528,9 @@ function render(game) {
       const san = m.san || m.uci;
       const isActive = m.ply === currentPly;
       const lossClass = m.cp_loss != null && m.cp_loss > 200 ? 'bad' : m.cp_loss != null && m.cp_loss > 75 ? 'warn' : '';
-      const lossStr = canReview && m.cp_loss != null && m.cp_loss > 0 ? `−${m.cp_loss}` : '';
+      const lossStr = canReview && m.cp_loss != null && m.cp_loss > 0
+        ? (m.cp_loss >= 10000 ? 'Mate' : `−${m.cp_loss}`)
+        : '';
       const badgeHtml = badge ? `<span class="move-badge badge-${badge.cls}" title="${badge.title}">${badge.label}</span>` : '';
       return `<div class="move-cell${isActive?' active':''}" data-ply="${m.ply}">
         <span class="move-san">${san}</span>${badgeHtml}
@@ -734,7 +737,7 @@ function renderCoachingCard(game, state) {
     <div class="coaching-header">
       <div class="coaching-title">
         ✦ AI Coaching Review
-        <span class="coaching-badge">Claude</span>
+        <span class="coaching-badge">Gemini</span>
       </div>
       ${btnHtml}
     </div>

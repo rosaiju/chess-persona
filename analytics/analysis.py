@@ -1,14 +1,21 @@
 """
 Post-game Stockfish analysis — run once per game, save results to DB.
 
-Accuracy formula (Lichess v2):
-    accuracy = max(0, min(100, 103.1668 × e^(−0.04354 × ACPL) − 3.1668))
-where ACPL = average centipawn loss per move for the player.
+Accuracy formula (casual-play exponential):
+    accuracy = max(0, min(100, 100 × e^(−ACPL / 150)))
+    ACPL=50 → ~72%,  ACPL=100 → ~51%,  ACPL=150 → ~37%,  ACPL=300 → ~14%
+
+The Lichess v2 formula hits 0% for ACPL > 80, which is designed for
+tournament players. This formula gives meaningful values for casual play.
 
 cp_loss for each move = max(0, best_eval_for_player − actual_eval_for_player)
   - best_eval_for_player = centipawn score Stockfish would get with best move
   - actual_eval_for_player = centipawn score after the move actually played
   Both expressed from the moving player's perspective (positive = player is winning).
+
+Individual cp_loss values are stored raw in the DB (including mate scores ~100000).
+ACPL computation caps each move at MAX_CP_LOSS_FOR_ACPL so a single
+mate-sequence error doesn't dominate the average.
 """
 import asyncio
 import logging
@@ -29,10 +36,15 @@ STOCKFISH_PATH = (
 
 ANALYSIS_TIME = 0.05  # seconds per position
 
+# Cap per-move cp_loss at this value before computing ACPL.
+# Prevents a single mate-sequence error (cp_loss ~99000) from collapsing the
+# accuracy to 0%.  Raw cp_loss is still stored in the DB unchanged.
+MAX_CP_LOSS_FOR_ACPL = 600
 
-def _lichess_accuracy(acpl: float) -> float:
+
+def _accuracy(acpl: float) -> float:
     import math
-    return max(0.0, min(100.0, 103.1668 * math.exp(-0.04354 * acpl) - 3.1668))
+    return max(0.0, min(100.0, 100.0 * math.exp(-acpl / 150.0)))
 
 
 def _analyze_game_sync(game_id: str):
@@ -131,23 +143,24 @@ def _analyze_game_sync(game_id: str):
             # PGN node
             pgn_node = pgn_node.add_variation(move)
 
-            # Track per-side accuracy
+            # Track per-side accuracy — cap at MAX_CP_LOSS_FOR_ACPL so that
+            # a single mate-sequence error doesn't dominate the average.
             is_ai_move = bool(row["is_ai_move"])
             if is_ai_move:
-                ai_cp_losses.append(cp_loss)
+                ai_cp_losses.append(min(cp_loss, MAX_CP_LOSS_FOR_ACPL))
             else:
-                human_cp_losses.append(cp_loss)
+                human_cp_losses.append(min(cp_loss, MAX_CP_LOSS_FOR_ACPL))
 
             updates.append((best_uci, cp_loss, san, fen_after, move_id))
 
     finally:
         engine.quit()
 
-    # Compute accuracy
+    # Compute accuracy (losses already capped at MAX_CP_LOSS_FOR_ACPL above)
     acpl_human = (sum(human_cp_losses) / len(human_cp_losses)) if human_cp_losses else 0
     acpl_ai    = (sum(ai_cp_losses)    / len(ai_cp_losses))    if ai_cp_losses    else 0
-    accuracy_human = _lichess_accuracy(acpl_human)
-    accuracy_ai    = _lichess_accuracy(acpl_ai)
+    accuracy_human = _accuracy(acpl_human)
+    accuracy_ai    = _accuracy(acpl_ai)
 
     pgn_str = str(pgn_game)
 
@@ -179,3 +192,47 @@ async def analyze_game(game_id: str):
         await asyncio.to_thread(_analyze_game_sync, game_id)
     except Exception:
         log.exception("analyze_game failed for %s", game_id)
+
+
+def recalculate_all_accuracies():
+    """
+    Recalculate accuracy for all analyzed games using stored cp_loss values.
+    Uses the current _accuracy() formula + MAX_CP_LOSS_FOR_ACPL cap.
+    Does NOT re-run Stockfish — only recomputes from data already in the DB.
+    """
+    with _conn() as con:
+        game_ids = [r[0] for r in con.execute(
+            "SELECT game_id FROM games WHERE analysis_done = 1"
+        ).fetchall()]
+
+    for game_id in game_ids:
+        with _conn() as con:
+            moves = con.execute(
+                "SELECT cp_loss, is_ai_move FROM moves "
+                "WHERE game_id = ? AND cp_loss IS NOT NULL",
+                (game_id,),
+            ).fetchall()
+
+        human_losses = [
+            min(m["cp_loss"], MAX_CP_LOSS_FOR_ACPL)
+            for m in moves if not m["is_ai_move"]
+        ]
+        ai_losses = [
+            min(m["cp_loss"], MAX_CP_LOSS_FOR_ACPL)
+            for m in moves if m["is_ai_move"]
+        ]
+
+        acpl_h = sum(human_losses) / len(human_losses) if human_losses else 0
+        acpl_a = sum(ai_losses)    / len(ai_losses)    if ai_losses    else 0
+        acc_h  = _accuracy(acpl_h)
+        acc_a  = _accuracy(acpl_a)
+
+        with _conn() as con:
+            con.execute(
+                "UPDATE games SET accuracy_human = ?, accuracy_ai = ? WHERE game_id = ?",
+                (round(acc_h, 1), round(acc_a, 1), game_id),
+            )
+        log.info(
+            "recalculated %s: human %.1f%% (ACPL %.1f)  ai %.1f%% (ACPL %.1f)",
+            game_id, acc_h, acpl_h, acc_a, acpl_a,
+        )

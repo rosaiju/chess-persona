@@ -183,22 +183,27 @@ def get_insights(opponent: str | None = None) -> dict:
         ).fetchall()
 
     n = len(games_rows)
+    n_analyzed = sum(1 for g in games_rows if g["analysis_done"])
     wins   = sum(1 for g in games_rows if g["human_result"] == "win")
     losses = sum(1 for g in games_rows if g["human_result"] == "loss")
     draws  = sum(1 for g in games_rows if g["human_result"] == "draw")
 
     human_moves = [m for m in moves_rows if not m["is_ai_move"]]
-    blunders    = [m for m in human_moves if m["trigger"] == "human_blunders"]
-    mistakes    = [m for m in human_moves if m["trigger"] == "human_mistake"]
-    good        = [m for m in human_moves if m["trigger"] == "human_good_move"]
+
+    # Use post-game Stockfish cp_loss for all quality classifications.
+    # Thresholds match the inline game review panel exactly.
+    blunders = [m for m in human_moves if m["cp_loss"] is not None and m["cp_loss"] > 200]
+    mistakes = [m for m in human_moves if m["cp_loss"] is not None and 75 < m["cp_loss"] <= 200]
+    # Good = best move (cp_loss=0) + excellent (cp_loss 1-25)
+    good     = [m for m in human_moves if m["cp_loss"] is not None and m["cp_loss"] <= 25]
 
     phase_breakdown = {}
     for phase in ("opening", "middlegame", "endgame"):
         ph = [m for m in human_moves if m["phase"] == phase]
         phase_breakdown[phase] = {
-            "blunders":   sum(1 for m in ph if m["trigger"] == "human_blunders"),
-            "mistakes":   sum(1 for m in ph if m["trigger"] == "human_mistake"),
-            "good_moves": sum(1 for m in ph if m["trigger"] == "human_good_move"),
+            "blunders":   sum(1 for m in ph if m["cp_loss"] is not None and m["cp_loss"] > 200),
+            "mistakes":   sum(1 for m in ph if m["cp_loss"] is not None and 75 < m["cp_loss"] <= 200),
+            "good_moves": sum(1 for m in ph if m["cp_loss"] is not None and m["cp_loss"] <= 25),
         }
 
     sq_counts: dict[str, int] = {}
@@ -215,9 +220,9 @@ def get_insights(opponent: str | None = None) -> dict:
             "game_id":        gid,
             "opponent":       g["opponent"],
             "result":         g["human_result"],
-            "blunders":       sum(1 for m in gm if m["trigger"] == "human_blunders"),
-            "mistakes":       sum(1 for m in gm if m["trigger"] == "human_mistake"),
-            "good_moves":     sum(1 for m in gm if m["trigger"] == "human_good_move"),
+            "blunders":       sum(1 for m in gm if m["cp_loss"] is not None and m["cp_loss"] > 200),
+            "mistakes":       sum(1 for m in gm if m["cp_loss"] is not None and 75 < m["cp_loss"] <= 200),
+            "good_moves":     sum(1 for m in gm if m["cp_loss"] is not None and m["cp_loss"] <= 25),
             "played_at":      g["played_at"],
             "url":            f"https://lichess.org/{gid}",
             "accuracy_human": g["accuracy_human"],
@@ -233,9 +238,9 @@ def get_insights(opponent: str | None = None) -> dict:
         "draws":           draws,
         "win_rate":        round(wins / n, 2) if n else 0,
         "per_game": {
-            "blunders":    round(len(blunders) / n, 2),
-            "mistakes":    round(len(mistakes) / n, 2),
-            "good_moves":  round(len(good) / n, 2),
+            "blunders":    round(len(blunders) / n_analyzed, 2) if n_analyzed else 0,
+            "mistakes":    round(len(mistakes) / n_analyzed, 2) if n_analyzed else 0,
+            "good_moves":  round(len(good)     / n_analyzed, 2) if n_analyzed else 0,
         },
         "phase_breakdown": phase_breakdown,
         "blunder_squares": [{"square": sq, "count": cnt} for sq, cnt in top_squares],

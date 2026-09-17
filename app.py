@@ -1,9 +1,13 @@
 import asyncio
 import json
+import logging
 import os
+import time
 from pathlib import Path
 from asyncio import Queue
 from typing import Set
+
+_log = logging.getLogger(__name__)
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -146,6 +150,8 @@ async def review(game_id: str):
 
 @app.post("/review/{game_id}/coaching")
 async def trigger_coaching(game_id: str):
+    t_req = time.monotonic()
+    _log.info("[coaching] POST /review/%s/coaching received", game_id)
     game = await asyncio.to_thread(get_game, game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -153,7 +159,17 @@ async def trigger_coaching(game_id: str):
         raise HTTPException(status_code=400, detail="Stockfish analysis not complete yet")
     existing = await asyncio.to_thread(get_coaching_review, game_id)
     if existing["done"]:
+        _log.info("[coaching] %s: already done — returning cached (%.3fs)", game_id, time.monotonic() - t_req)
         return {"status": "already_done", "review": existing["review"]}
+    # Guard against duplicate concurrent tasks.
+    from analytics.coaching import _active_reviews as _cr
+    if game_id in _cr:
+        _log.info(
+            "[coaching] %s: generation already active (%.1fs) — returning 'started' without a new task",
+            game_id, time.monotonic() - _cr[game_id],
+        )
+        return {"status": "started"}
+    _log.info("[coaching] %s: no active generation found — starting new task", game_id)
     asyncio.create_task(generate_coaching_review(game_id))
     return {"status": "started"}
 

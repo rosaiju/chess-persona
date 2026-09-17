@@ -10,148 +10,152 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: system-ui, sans-serif;
-      background: #0f0f0f;
-      color: #e8e8e8;
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      background: #f0ebe1;
+      color: #1c1710;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
     }
 
+    /* ── Header ── */
     header {
       width: 100%;
+      background: #1b3a22;
+      padding: 13px 24px 11px;
       text-align: center;
-      padding: 32px 16px 20px;
-      border-bottom: 1px solid #1e1e1e;
+      border-bottom: 3px solid #8b5e3c;
     }
-    header h1 { font-size: 2rem; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
-    .subtitle { margin-top: 6px; color: #666; font-size: 0.9rem; }
+    header h1 {
+      font-size: 1.35rem; font-weight: 800; color: #f0ebe1;
+      letter-spacing: 0.5px;
+    }
+    .subtitle { margin-top: 3px; color: #7aaa8a; font-size: 0.78rem; }
 
+    /* ── Main layout ── */
     .main {
-      display: flex;
-      gap: 32px;
-      padding: 28px 24px;
-      width: 100%;
-      max-width: 960px;
-      align-items: flex-start;
+      display: flex; gap: 20px; padding: 18px 20px;
+      width: 100%; max-width: 980px; align-items: flex-start;
+    }
+    .left  { display: flex; flex-direction: column; gap: 10px; flex: 0 0 372px; }
+    .right { display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0; }
+
+    /* ── Controls card ── */
+    .controls-card {
+      background: #fff; border: 1px solid #d9d0c4; border-radius: 10px;
+      padding: 13px 14px; display: flex; flex-direction: column; gap: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .controls-card input[type="text"], .controls-card input:not([type]) {
+      background: #faf7f3; box-shadow: none;
+    }
+    .controls-card .senserobot-row { background: #faf7f3; box-shadow: none; }
+
+    /* ── Button row ── */
+    .btn-row { display: flex; gap: 8px; }
+    .btn-row .btn-primary { flex: 1; width: auto; }
+    .btn-row .btn-rematch { flex: 0 0 auto; width: auto; padding: 11px 16px; }
+
+    /* ── Board label ── */
+    .board-section { display: flex; flex-direction: column; gap: 6px; }
+    .board-section-label {
+      font-size: 0.62rem; color: #b0a490; text-transform: uppercase;
+      letter-spacing: 0.7px; font-weight: 700; text-align: center;
     }
 
-    /* ── LEFT COLUMN: controls + board ── */
-    .left { display: flex; flex-direction: column; gap: 16px; flex: 0 0 380px; }
-
-    /* ── RIGHT COLUMN: chat ── */
-    .right { display: flex; flex-direction: column; gap: 16px; flex: 1; min-width: 0; }
+    /* ── Section labels ── */
+    .section-label {
+      font-size: 0.67rem; color: #9c8d82; text-transform: uppercase;
+      letter-spacing: 0.7px; margin-bottom: 7px; font-weight: 700;
+    }
 
     /* ── Personality selector ── */
-    .persona-label {
-      font-size: 0.75rem; color: #666; text-transform: uppercase;
-      letter-spacing: 0.5px; margin-bottom: 4px;
-    }
-    .persona-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .persona-row { display: flex; gap: 7px; flex-wrap: wrap; }
     .p-btn {
-      flex: 1;
-      background: #1a1a1a;
-      border: 2px solid #333;
-      border-radius: 8px;
-      padding: 0;
-      height: 44px;
-      color: #aaa;
-      font-size: 0.82rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.15s;
-      text-align: center;
-      white-space: nowrap;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      flex: 1; background: #fff;
+      border: 1.5px solid #d9d0c4; border-radius: 7px; height: 36px;
+      color: #6b5d52; font-size: 0.77rem; font-weight: 600; cursor: pointer;
+      transition: all 0.15s; display: flex; align-items: center; justify-content: center;
+      white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.06);
     }
-    .p-btn:hover { border-color: #555; color: #ddd; }
-    .p-btn.active { border-color: #2563eb; color: #fff; background: #172040; }
+    .p-btn:hover { border-color: #a89880; color: #1c1710; background: #f8f5f0; }
+    .p-btn.active { border-color: #1b3a22; color: #f0ebe1; background: #1b3a22; box-shadow: 0 1px 4px rgba(27,58,34,0.3); }
 
     /* ── Fields ── */
-    .field { display: flex; flex-direction: column; gap: 6px; }
-    .field label { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label { font-size: 0.67rem; color: #9c8d82; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; }
     input[type="text"], input:not([type]) {
-      background: #1a1a1a;
-      border: 1px solid #2a2a2a;
-      border-radius: 6px;
-      padding: 10px 12px;
-      color: #e8e8e8;
-      font-size: 0.95rem;
-      outline: none;
-      transition: border-color 0.15s;
-      width: 100%;
+      background: #fff; border: 1.5px solid #d9d0c4; border-radius: 7px;
+      padding: 9px 12px; color: #1c1710; font-size: 0.9rem; outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s; width: 100%;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
-    input[type="text"]:focus, input:not([type]):focus { border-color: #444; }
-    input[type="text"]:disabled, input:not([type]):disabled { opacity: 0.4; }
+    input[type="text"]:focus, input:not([type]):focus {
+      border-color: #1b3a22; box-shadow: 0 0 0 3px rgba(27,58,34,0.12);
+    }
+    input:disabled { opacity: 0.45; }
 
     /* ── SenseRobot toggle ── */
     .senserobot-row {
-      display: flex; align-items: center; gap: 10px;
-      font-size: 0.82rem; color: #666;
-      padding: 8px 12px;
-      background: #111; border: 1px solid #1e1e1e; border-radius: 6px;
+      display: flex; align-items: center; gap: 9px; font-size: 0.8rem; color: #9c8d82;
+      padding: 9px 12px; background: #fff; border: 1.5px solid #d9d0c4; border-radius: 7px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
-    .senserobot-row input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
-    .senserobot-row label { cursor: pointer; user-select: none; }
-    .senserobot-row.active { border-color: #7c3aed44; background: #1a0f2a; color: #c4b5fd; }
+    .senserobot-row input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; accent-color: #5b2d8a; }
+    .senserobot-row label { cursor: pointer; user-select: none; color: #6b5d52; }
+    .senserobot-row.active { border-color: #9b72cf; background: #f8f4ff; }
+    .senserobot-row.active label { color: #5b2d8a; }
 
+    /* ── Buttons ── */
     .btn-primary {
-      background: #2563eb; color: #fff; border: none;
-      border-radius: 8px; padding: 12px 20px;
-      font-size: 0.95rem; font-weight: 600; cursor: pointer;
-      transition: background 0.15s, opacity 0.15s;
-      width: 100%;
+      background: #1b3a22; color: #f0ebe1; border: none; border-radius: 7px;
+      padding: 11px 20px; font-size: 0.9rem; font-weight: 700; cursor: pointer;
+      transition: background 0.15s, opacity 0.15s; width: 100%;
+      box-shadow: 0 2px 5px rgba(27,58,34,0.3);
     }
-    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
-    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary:hover:not(:disabled) { background: #254d2e; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
     .btn-rematch {
-      background: #1a1a1a; color: #aaa; border: 1px solid #333;
-      border-radius: 8px; padding: 10px 20px;
-      font-size: 0.88rem; font-weight: 600; cursor: pointer;
-      transition: all 0.15s; width: 100%;
+      background: #fff; color: #6b5d52; border: 1.5px solid #d9d0c4;
+      border-radius: 7px; padding: 9px 20px; font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; transition: all 0.15s;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
-    .btn-rematch:hover { border-color: #555; color: #fff; }
+    .btn-rematch:hover { border-color: #a89880; color: #1c1710; background: #f8f5f0; }
 
     /* ── Status badges ── */
     .status-badge {
-      border-radius: 8px; padding: 10px 16px; font-size: 0.88rem;
-      display: none; align-items: center; gap: 8px;
+      border-radius: 7px; padding: 9px 14px; font-size: 0.84rem;
+      display: none; align-items: center; gap: 8px; border: 1px solid transparent;
     }
-    .status-badge.blue  { background: #0e2240; color: #93c5fd; display: flex; }
-    .status-badge.green { background: #0a2010; color: #86efac; display: flex; }
-    .status-badge.amber { background: #1a1200; color: #fcd34d; display: flex; }
-    .status-badge.red   { background: #1a0a0a; color: #fca5a5; display: flex; }
+    .status-badge.blue  { background: #eef3fb; color: #1a3d6b; border-color: #c2d4f0; display: flex; }
+    .status-badge.green { background: #eaf2ec; color: #1a4d2b; border-color: #aed4b8; display: flex; }
+    .status-badge.amber { background: #fef9e4; color: #7a5200; border-color: #e8d47a; display: flex; }
+    .status-badge.red   { background: #fdf0f0; color: #8b1a1a; border-color: #f0b8b8; display: flex; }
     .status-badge { display: none; }
 
     .game-link { display: none; align-items: center; gap: 10px; }
-    .game-link a { color: #60a5fa; font-size: 0.85rem; text-decoration: none; }
+    .game-link a { color: #1a3d6b; font-size: 0.82rem; text-decoration: none; font-weight: 500; }
     .game-link a:hover { text-decoration: underline; }
     button.small {
-      background: #1e1e1e; color: #aaa; border: 1px solid #2a2a2a;
-      border-radius: 4px; padding: 4px 10px; font-size: 0.8rem; cursor: pointer;
+      background: #fff; color: #6b5d52; border: 1px solid #d9d0c4;
+      border-radius: 5px; padding: 4px 10px; font-size: 0.78rem; cursor: pointer;
     }
-    button.small:hover { background: #252525; }
+    button.small:hover { background: #f4f0ea; }
 
-    /* ── Chess board ── */
+    /* ── Chess board (main game) ── */
     .board-wrap { display: flex; justify-content: center; }
     .chess-board {
-      display: grid;
-      grid-template-columns: repeat(8, 1fr);
-      width: 100%;
-      max-width: 360px;
-      aspect-ratio: 1;
-      border: 2px solid #333;
-      border-radius: 6px;
-      overflow: hidden;
+      display: grid; grid-template-columns: repeat(8, 1fr);
+      width: 100%; max-width: 356px; aspect-ratio: 1;
+      border: 3px solid #8b5e3c; border-radius: 4px; overflow: hidden;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.18);
     }
     .sq {
       display: flex; align-items: center; justify-content: center;
-      font-size: clamp(1rem, 3.5vw, 2rem); line-height: 1; user-select: none;
-      aspect-ratio: 1;
+      font-size: clamp(1rem, 3.5vw, 2rem); line-height: 1; user-select: none; aspect-ratio: 1;
     }
     .sq.light { background: #f0d9b5; }
     .sq.dark  { background: #b58863; }
@@ -159,188 +163,301 @@
     .sq .bp { color: #1a1a1a; text-shadow: 0 0 2px rgba(255,255,255,0.4); }
     .sq.selected { background: #7fc97f !important; }
     .sq.legal-move::after {
-      content: '';
-      width: 32%; height: 32%;
-      background: rgba(0,0,0,0.18);
-      border-radius: 50%;
-      pointer-events: none;
+      content: ''; width: 30%; height: 30%;
+      background: rgba(0,0,0,0.14); border-radius: 50%; pointer-events: none;
     }
     .sq.legal-move.occupied::after {
-      width: 100%; height: 100%;
-      border-radius: 0;
-      background: transparent;
-      outline: 4px inset rgba(0,0,0,0.22);
+      width: 100%; height: 100%; border-radius: 0;
+      background: transparent; outline: 4px inset rgba(0,0,0,0.18);
     }
     .chess-board.human-turn .sq { cursor: pointer; }
     .chess-board.view-only .sq { cursor: default; }
 
     /* ── Game info panel ── */
     #game-info {
-      background: #111; border: 1px solid #1e1e1e; border-radius: 6px;
-      padding: 10px 12px; font-size: 0.78rem; color: #555;
+      background: #fff; border: 1px solid #d9d0c4; border-radius: 7px;
+      padding: 10px 12px; font-size: 0.76rem; color: #9c8d82;
       display: flex; flex-direction: column; gap: 4px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
-    #game-info span { color: #999; }
+    #game-info span { color: #1c1710; }
 
     /* ── Log ── */
     .log {
-      background: #111; border: 1px solid #1e1e1e; border-radius: 6px;
-      padding: 10px 12px; font-family: monospace; font-size: 0.75rem;
-      color: #555; max-height: 120px; overflow-y: auto;
+      background: #fff; border: 1px solid #d9d0c4; border-radius: 7px;
+      padding: 10px 12px; font-family: 'Courier New', monospace; font-size: 0.7rem;
+      color: #9c8d82; max-height: 96px; overflow-y: auto;
       display: flex; flex-direction: column; gap: 2px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
-    .log:empty::after { content: 'No events yet.'; color: #333; }
+    .log:empty::after { content: 'No events yet.'; color: #c8bfb0; }
 
-    /* ── Right column: persona header ── */
+    /* ── Persona display ── */
     .persona-display {
       display: flex; align-items: center; gap: 10px;
-      padding: 14px 16px;
-      background: #141414; border: 1px solid #222; border-radius: 10px;
+      padding: 10px 14px; background: #fff; border: 1.5px solid #d9d0c4; border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
     }
-    .persona-avatar { font-size: 2rem; line-height: 1; }
-    .persona-name { font-size: 1rem; font-weight: 700; color: #fff; }
-    .persona-desc { font-size: 0.78rem; color: #666; margin-top: 2px; }
+    .persona-avatar { font-size: 1.6rem; line-height: 1; }
+    .persona-name { font-size: 0.9rem; font-weight: 700; color: #1c1710; }
+    .persona-desc { font-size: 0.72rem; color: #9c8d82; margin-top: 2px; }
 
-    /* ── Chat bubble area ── */
+    /* ── Chat area ── */
     .chat-area {
-      display: flex; flex-direction: column; gap: 10px;
-      min-height: 280px;
-      padding: 12px;
-      background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 10px;
-      overflow-y: auto;
-      position: relative;
+      display: flex; flex-direction: column; gap: 10px; min-height: 150px; padding: 12px;
+      background: #f8f5f0; border: 1px solid #d9d0c4; border-radius: 8px;
+      overflow-y: auto; position: relative; box-shadow: inset 0 1px 3px rgba(0,0,0,0.04);
     }
     .chat-empty {
-      position: absolute; inset: 0;
-      display: flex; align-items: center; justify-content: center;
-      color: #2a2a2a; font-size: 0.85rem; text-align: center; line-height: 1.5;
-      pointer-events: none;
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      color: #c8bfb0; font-size: 0.82rem; text-align: center; pointer-events: none;
     }
-
-    .bubble {
-      display: flex; align-items: flex-start; gap: 10px;
-      animation: bubbleIn 0.3s ease forwards;
-      opacity: 0;
-    }
-    @keyframes bubbleIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
+    .bubble { display: flex; align-items: flex-start; gap: 10px; animation: bubbleIn 0.3s ease forwards; opacity: 0; }
+    @keyframes bubbleIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     .bubble.fading { animation: bubbleOut 0.6s ease forwards; }
-    @keyframes bubbleOut {
-      from { opacity: 1; }
-      to   { opacity: 0; height: 0; margin: 0; padding: 0; overflow: hidden; }
-    }
-    .bubble-avatar { font-size: 1.4rem; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+    @keyframes bubbleOut { from { opacity: 1; } to { opacity: 0; height: 0; margin: 0; padding: 0; overflow: hidden; } }
+    .bubble-avatar { font-size: 1.3rem; line-height: 1; flex-shrink: 0; margin-top: 2px; }
     .bubble-text {
-      background: #1a1a1a; border: 1px solid #252525; border-radius: 0 10px 10px 10px;
-      padding: 10px 14px; font-size: 0.9rem; color: #ddd; line-height: 1.45;
-      max-width: 100%;
+      background: #fff; border: 1px solid #e4ddd4; border-radius: 0 10px 10px 10px;
+      padding: 9px 13px; font-size: 0.87rem; color: #1c1710; line-height: 1.5; max-width: 100%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
-    /* Personality color accents */
-    .bubble[data-p="Cocky"]      .bubble-text { border-color: #2563eb44; }
-    .bubble[data-p="Aggressive"] .bubble-text { border-color: #dc262644; }
-    .bubble[data-p="Nervous"]    .bubble-text { border-color: #d9770644; }
-    .bubble[data-p="Friendly"]   .bubble-text { border-color: #16a34a44; }
+    .bubble[data-p="Cocky"]      .bubble-text { border-left: 3px solid #1a3d6b; }
+    .bubble[data-p="Aggressive"] .bubble-text { border-left: 3px solid #8b1a1a; }
+    .bubble[data-p="Nervous"]    .bubble-text { border-left: 3px solid #8b5e1a; }
+    .bubble[data-p="Friendly"]   .bubble-text { border-left: 3px solid #1b3a22; }
 
-    /* ── TTS mute toggle ── */
-    .tts-row {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 0.8rem; color: #555;
-    }
+    /* ── TTS toggle ── */
+    .tts-row { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: #9c8d82; }
     .tts-toggle {
-      background: none; border: 1px solid #2a2a2a; border-radius: 4px;
-      color: #666; padding: 4px 10px; cursor: pointer; font-size: 0.78rem;
+      background: #fff; border: 1px solid #d9d0c4; border-radius: 6px;
+      color: #6b5d52; padding: 4px 10px; cursor: pointer; font-size: 0.76rem; transition: all 0.15s;
     }
-    .tts-toggle:hover { border-color: #444; color: #aaa; }
-    .tts-toggle.muted { background: #1a0a0a; border-color: #4a1a1a; color: #f87171; }
+    .tts-toggle:hover { border-color: #a89880; }
+    .tts-toggle.muted { background: #fdf0f0; border-color: #f0b8b8; color: #8b1a1a; }
 
     /* ── Insights panel ── */
     .insights-section {
-      display: none; flex-direction: column; gap: 0;
-      background: #0d0d0d; border: 1px solid #1e1e1e; border-radius: 10px;
-      overflow: hidden;
+      display: none; flex-direction: column;
+      background: #fff; border: 1px solid #d9d0c4; border-radius: 10px;
+      overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.09);
     }
     .insights-section.visible { display: flex; }
 
     .ins-header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 11px 16px; border-bottom: 1px solid #161616;
+      padding: 11px 16px; background: #1b3a22; border-bottom: 2px solid #8b5e3c;
     }
-    .ins-title { font-size: 0.72rem; font-weight: 700; color: #666; text-transform: uppercase; letter-spacing: 0.6px; }
-    .ins-loading { color: #383838; font-size: 0.75rem; font-style: italic; }
+    .ins-title { font-size: 0.7rem; font-weight: 700; color: #7aaa8a; text-transform: uppercase; letter-spacing: 0.7px; }
+    .ins-loading { color: #4a7a5a; font-size: 0.73rem; font-style: italic; }
 
-    .ins-body { padding: 16px; display: flex; flex-direction: column; gap: 18px; }
+    .ins-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 16px; }
 
-    /* Summary strip */
-    .ins-summary { display: flex; align-items: flex-end; gap: 0; }
-    .ins-summary-left { display: flex; flex-direction: column; gap: 4px; flex: 1; }
-    .ins-record { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; }
-    .ins-record .r-games { font-weight: 700; color: #ccc; }
-    .ins-record .r-games-lbl { color: #3a3a3a; font-size: 0.75rem; }
-    .ins-record .r-sep { color: #222; }
-    .ins-record .r-w { color: #4ade80; font-weight: 600; }
-    .ins-record .r-l { color: #f87171; font-weight: 600; }
-    .ins-record .r-d { color: #fbbf24; font-weight: 600; }
+    /* Summary */
+    .ins-summary { display: flex; align-items: flex-end; }
+    .ins-summary-left { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+    .ins-record { display: flex; align-items: center; gap: 7px; font-size: 0.82rem; }
+    .ins-record .r-games { font-weight: 800; color: #1c1710; }
+    .ins-record .r-games-lbl { color: #b0a490; font-size: 0.73rem; }
+    .ins-record .r-sep { color: #d9d0c4; }
+    .ins-record .r-w { color: #1a4d2b; font-weight: 700; }
+    .ins-record .r-l { color: #8b1a1a; font-weight: 700; }
+    .ins-record .r-d { color: #7a5200; font-weight: 700; }
     .ins-winrate { text-align: right; }
-    .ins-winrate .wr-num { font-size: 2rem; font-weight: 800; color: #e8e8e8; line-height: 1; }
-    .ins-winrate .wr-lbl { font-size: 0.65rem; color: #444; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
+    .ins-winrate .wr-num { font-size: 2rem; font-weight: 900; color: #1b3a22; line-height: 1; }
+    .ins-winrate .wr-lbl { font-size: 0.62rem; color: #b0a490; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
 
-    /* Metrics */
+    /* Stat cards */
+    .ins-slabel { font-size: 0.63rem; color: #b0a490; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; font-weight: 700; }
     .ins-metrics { display: flex; gap: 8px; }
     .ins-metric {
-      flex: 1; background: #111; border-radius: 7px;
-      padding: 10px 12px; border-top: 2px solid transparent;
+      flex: 1; background: #faf7f3; border-radius: 7px;
+      padding: 10px 12px; border: 1px solid #e6ddd4; border-top: 3px solid transparent;
     }
-    .ins-metric.m-bad  { border-top-color: #f87171; }
-    .ins-metric.m-warn { border-top-color: #fbbf24; }
-    .ins-metric.m-good { border-top-color: #4ade80; }
-    .ins-metric .m-val { font-size: 1.45rem; font-weight: 700; color: #e8e8e8; line-height: 1; }
-    .ins-metric .m-lbl { font-size: 0.62rem; color: #4a4a4a; margin-top: 5px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .ins-metric.m-bad  { border-top-color: #8b1a1a; }
+    .ins-metric.m-warn { border-top-color: #7a5200; }
+    .ins-metric.m-good { border-top-color: #1a4d2b; }
+    .ins-metric .m-val { font-size: 1.4rem; font-weight: 800; color: #1c1710; line-height: 1; }
+    .ins-metric .m-lbl { font-size: 0.6rem; color: #b0a490; margin-top: 5px; text-transform: uppercase; letter-spacing: 0.3px; }
 
     /* Phase bars */
-    .ins-slabel { font-size: 0.65rem; color: #383838; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 9px; }
-    .ins-phases { display: flex; flex-direction: column; gap: 8px; }
+    .ins-phases { display: flex; flex-direction: column; gap: 9px; }
     .ins-phase-row { display: flex; align-items: center; gap: 10px; }
-    .ins-phase-row .ph-name {
-      font-size: 0.7rem; color: #555; text-transform: uppercase;
-      letter-spacing: 0.3px; width: 78px; flex-shrink: 0;
-    }
-    .ins-phase-row.is-worst .ph-name { color: #f87171; font-weight: 600; }
-    .ph-bar-track { flex: 1; background: #181818; border-radius: 3px; height: 5px; overflow: hidden; }
-    .ph-bar-fill  { height: 100%; border-radius: 3px; background: #2a2a2a; transition: width 0.5s ease; }
-    .ph-bar-fill.pf-worst { background: #f87171; }
-    .ph-bar-fill.pf-mid   { background: #fbbf24; }
-    .ins-phase-row .ph-stat {
-      font-size: 0.68rem; color: #444; width: 64px; text-align: right; flex-shrink: 0; white-space: nowrap;
-    }
-    .ins-phase-row.is-worst .ph-stat { color: #f87171; }
+    .ins-phase-row .ph-name { font-size: 0.68rem; color: #9c8d82; text-transform: capitalize; width: 80px; flex-shrink: 0; font-weight: 500; }
+    .ins-phase-row.is-worst .ph-name { color: #8b1a1a; font-weight: 700; }
+    .ph-bar-track { flex: 1; background: #e9e2d8; border-radius: 3px; height: 5px; overflow: hidden; }
+    .ph-bar-fill { height: 100%; border-radius: 3px; background: #c8bfb0; transition: width 0.5s ease; }
+    .ph-bar-fill.pf-worst { background: #8b1a1a; }
+    .ph-bar-fill.pf-mid   { background: #8b5e1a; }
+    .ins-phase-row .ph-stat { font-size: 0.67rem; color: #b0a490; width: 64px; text-align: right; flex-shrink: 0; white-space: nowrap; }
+    .ins-phase-row.is-worst .ph-stat { color: #8b1a1a; font-weight: 600; }
 
     /* Recent games */
-    .ins-recent { display: flex; flex-direction: column; gap: 2px; }
+    .ins-recent { display: flex; flex-direction: column; gap: 3px; }
     .ins-recent-row {
-      display: grid; grid-template-columns: 68px 22px 1fr auto auto;
+      display: grid; grid-template-columns: 70px 22px 1fr auto auto;
       align-items: center; gap: 8px;
-      padding: 7px 10px; background: #111; border-radius: 6px;
-      font-size: 0.74rem;
+      padding: 9px 12px; background: #faf7f3; border-radius: 6px;
+      font-size: 0.74rem; cursor: pointer;
+      border: 1px solid #e6ddd4;
+      border-left: 3px solid transparent;
+      transition: background 0.15s, border-color 0.15s;
     }
-    .rr-date { color: #363636; }
-    .rr-res  { font-weight: 700; font-size: 0.78rem; text-align: center; }
-    .rr-res.win  { color: #4ade80; }
-    .rr-res.loss { color: #f87171; }
-    .rr-res.draw { color: #fbbf24; }
-    .rr-stats { color: #4a4a4a; }
-    .rr-acc { font-size: 0.68rem; color: #555; white-space: nowrap; }
-    .rr-acc span { color: #3b82f6; font-weight: 600; }
-    .rr-links { display: flex; gap: 6px; }
-    .rr-links a { text-decoration: none; font-size: 0.65rem; opacity: 0.6; white-space: nowrap; }
-    .rr-links a:hover { opacity: 1; text-decoration: underline; }
-    .rr-links .review-link { color: #a855f7; }
-    .rr-links .lichess-link { color: #2563eb; }
+    .ins-recent-row.win  { border-left-color: #aed4b8; }
+    .ins-recent-row.loss { border-left-color: #f0b8b8; }
+    .ins-recent-row.draw { border-left-color: #e8d47a; }
+    .ins-recent-row:hover { background: #f4f0ea; }
+    .ins-recent-row.win:hover  { border-left-color: #7ac49a; }
+    .ins-recent-row.loss:hover { border-left-color: #e07878; }
+    .ins-recent-row.active { background: #eaf2ec; border-top-color: #aed4b8; border-right-color: #aed4b8; border-bottom-color: #aed4b8; border-left: 3px solid #1b3a22; }
+    .rr-date { color: #b0a490; font-size: 0.7rem; }
+    .rr-res  { font-weight: 700; font-size: 0.8rem; text-align: center; }
+    .rr-res.win  { color: #1a4d2b; }
+    .rr-res.loss { color: #8b1a1a; }
+    .rr-res.draw { color: #7a5200; }
+    .rr-stats { color: #9c8d82; }
+    .rr-acc { font-size: 0.67rem; color: #9c8d82; white-space: nowrap; }
+    .rr-acc span { color: #1b3a22; font-weight: 700; }
+    .rr-open { font-size: 0.63rem; color: #aed4b8; white-space: nowrap; transition: color 0.15s; }
+    .ins-recent-row:hover .rr-open { color: #1a4d2b; }
+    .ins-recent-row.active .rr-open { color: #1a4d2b; font-weight: 600; }
+
+    /* ── Inline review panel ── */
+    #review-panel {
+      margin: 0 8px 12px;
+      background: #fff;
+      border: 1px solid #aed4b8; border-left: 3px solid #1b3a22;
+      border-radius: 8px; overflow: hidden; animation: slideDown 0.2s ease;
+      box-shadow: 0 2px 10px rgba(27,58,34,0.1);
+    }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+    .rv-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      padding: 12px 16px; background: #f4f9f5; border-bottom: 1px solid #d4e8d8;
+      gap: 12px; flex-wrap: wrap;
+    }
+    .rv-header-info { min-width: 0; }
+    .rv-players { font-size: 0.88rem; font-weight: 600; color: #1c1710; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .rv-result-badge { font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+    .rv-result-badge.win  { background: #eaf2ec; color: #1a4d2b; border: 1px solid #aed4b8; }
+    .rv-result-badge.loss { background: #fdf0f0; color: #8b1a1a; border: 1px solid #f0b8b8; }
+    .rv-result-badge.draw { background: #fef9e4; color: #7a5200; border: 1px solid #e8d47a; }
+    .rv-meta { font-size: 0.72rem; color: #9c8d82; margin-top: 3px; }
+    .rv-acc-row { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    .rv-acc-pill { font-size: 0.7rem; font-weight: 600; padding: 2px 9px; border-radius: 12px; border: 1px solid transparent; }
+    .rv-acc-pill.human { background: #eaf2ec; color: #1a4d2b; border-color: #aed4b8; }
+    .rv-acc-pill.ai    { background: #eef3fb; color: #1a3d6b; border-color: #c2d4f0; }
+    .rv-close-btn {
+      background: #fff; border: 1px solid #d9d0c4; border-radius: 6px;
+      color: #9c8d82; padding: 5px 12px; font-size: 0.78rem; cursor: pointer;
+      white-space: nowrap; flex-shrink: 0; transition: all 0.15s;
+    }
+    .rv-close-btn:hover { border-color: #a89880; color: #1c1710; }
+
+    .rv-body { display: flex; gap: 12px; padding: 14px; align-items: flex-start; flex-wrap: wrap; }
+    .rv-board-col { display: flex; gap: 8px; align-items: flex-start; flex-shrink: 0; }
+    .rv-moves-col { flex: 1; min-width: 200px; }
+
+    /* Eval bar */
+    .rv-eval-bar {
+      width: 14px; border-radius: 4px; overflow: hidden;
+      border: 1px solid #d9d0c4; background: #1c1710;
+      position: relative; flex-shrink: 0;
+    }
+    .rv-eval-white { background: #f0ebe1; width: 100%; transition: height 0.25s ease; position: absolute; bottom: 0; }
+
+    /* Review board */
+    .rv-board-wrap { display: flex; flex-direction: column; gap: 6px; }
+    .rv-board {
+      display: grid; grid-template-columns: repeat(8, 1fr);
+      border: 2px solid #8b5e3c; border-radius: 3px; overflow: hidden;
+      user-select: none; width: 256px; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+    .rv-sq { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: default; position: relative; }
+    .rv-sq.light { background: #f0d9b5; }
+    .rv-sq.dark  { background: #b58863; }
+    .rv-sq.active { box-shadow: inset 0 0 0 3px rgba(200,160,0,0.75); }
+    .rv-sq-label { position: absolute; font-size: 8px; font-weight: 600; opacity: 0.45; line-height: 1; }
+    .rv-sq-label.file { bottom: 1px; right: 2px; }
+    .rv-sq-label.rank { top: 1px; left: 2px; }
+
+    /* Nav */
+    .rv-nav { display: flex; gap: 5px; justify-content: center; }
+    .rv-nav-btn {
+      background: #fff; border: 1px solid #d9d0c4; color: #6b5d52;
+      padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+      transition: all 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .rv-nav-btn:hover { border-color: #a89880; color: #1c1710; }
+    .rv-nav-btn:disabled { opacity: 0.35; cursor: default; }
+
+    /* Move list */
+    .rv-moves-header {
+      padding: 8px 12px; background: #f4f0ea; border: 1px solid #e0d8cc;
+      border-radius: 6px 6px 0 0; font-size: 0.68rem; font-weight: 700; color: #9c8d82; text-transform: uppercase; letter-spacing: 0.4px;
+    }
+    .rv-moves-list {
+      overflow-y: auto; max-height: 320px; background: #fff;
+      border: 1px solid #e0d8cc; border-top: none; border-radius: 0 0 6px 6px;
+    }
+    .rv-move-pair { display: flex; border-bottom: 1px solid #f0ebe1; }
+    .rv-move-num { width: 30px; padding: 5px 4px 5px 8px; color: #c8bfb0; font-size: 11px; flex-shrink: 0; display: flex; align-items: center; background: #faf7f3; }
+    .rv-move-cell {
+      flex: 1; padding: 5px 7px; cursor: pointer; display: flex; align-items: center;
+      gap: 5px; min-width: 0; border-left: 1px solid #f0ebe1; transition: background 0.1s; font-size: 12px;
+    }
+    .rv-move-cell:hover { background: #f8f5f0; }
+    .rv-move-cell.active { background: #eaf2ec; }
+    .rv-move-san { font-weight: 600; font-family: 'Courier New', monospace; color: #1c1710; }
+    .rv-move-badge { font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px; flex-shrink: 0; }
+    .rv-badge-blunder    { background: #fdf0f0; color: #8b1a1a; }
+    .rv-badge-mistake    { background: #fef5e4; color: #7a3c00; }
+    .rv-badge-inaccuracy { background: #fefbe4; color: #7a5200; }
+    .rv-badge-excellent  { background: #eaf2ec; color: #1a4d2b; }
+    .rv-move-loss { margin-left: auto; font-size: 10px; color: #b0a490; white-space: nowrap; flex-shrink: 0; }
+    .rv-move-loss.bad  { color: #8b1a1a; font-weight: 600; }
+    .rv-move-loss.warn { color: #7a3c00; }
+
+    .rv-loading { padding: 36px; text-align: center; color: #9c8d82; font-size: 0.82rem; }
+
+    /* Coaching card */
+    .rv-coaching {
+      margin: 0 8px 12px;
+      background: #fff; border: 1px solid #e0d8cc; border-left: 3px solid #8b5e3c;
+      border-radius: 7px; overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .rv-coaching-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 16px; background: #f9f4ff; border-bottom: 1px solid #e4d9f5;
+    }
+    .rv-coaching-title { font-size: 0.78rem; font-weight: 700; color: #5b2d8a; display: flex; align-items: center; gap: 6px; }
+    .rv-coaching-badge { font-size: 0.6rem; font-weight: 700; padding: 2px 7px; border-radius: 10px; background: #ede8ff; color: #5b2d8a; border: 1px solid #c4b5fd; }
+    .rv-coaching-body { padding: 14px 18px 18px; }
+    .rv-coaching-thinking { padding: 24px; text-align: center; color: #9c8d82; font-size: 0.8rem; }
+    .rv-coaching-section { margin-bottom: 14px; }
+    .rv-coaching-section:last-child { margin-bottom: 0; }
+    .rv-coaching-section h3 {
+      font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+      color: #9c8d82; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1.5px solid #e9e2d8;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .rv-coaching-section h3.s-well    { color: #1a4d2b; border-color: #aed4b8; }
+    .rv-coaching-section h3.s-mistakes{ color: #8b1a1a; border-color: #f0b8b8; }
+    .rv-coaching-section h3.s-patterns{ color: #5b2d8a; border-color: #c4b5fd; }
+    .rv-coaching-section h3.s-focus   { color: #1a3d6b; border-color: #c2d4f0; }
+    .rv-coaching-section p { font-size: 0.83rem; line-height: 1.72; color: #3d3028; margin-bottom: 6px; }
+    .rv-coaching-section p:last-child { margin-bottom: 0; }
+    .rv-coaching-error { padding: 14px 18px; color: #8b1a1a; font-size: 0.8rem; }
 
     @media (max-width: 700px) {
-      .main { flex-direction: column; }
+      .main { flex-direction: column; padding: 14px; }
       .left { flex: none; width: 100%; }
+      .rv-board { width: 100%; }
+      .rv-board-col { width: 100%; flex-direction: column; }
+      .rv-eval-bar { display: none; }
+      .rv-body { padding: 10px; }
     }
   </style>
 </head>
@@ -356,39 +473,45 @@
   <!-- ── LEFT: controls + board ── -->
   <div class="left">
 
-    <div class="field">
-      <div class="persona-label">Personality</div>
-      <div class="persona-row">
-        <button class="p-btn active" data-p="Cocky"      onclick="setPersonality(this)">😎 Cocky</button>
-        <button class="p-btn"        data-p="Aggressive" onclick="setPersonality(this)">⚔️ Aggressive</button>
-        <button class="p-btn"        data-p="Nervous"    onclick="setPersonality(this)">😰 Nervous</button>
-        <button class="p-btn"        data-p="Friendly"   onclick="setPersonality(this)">😊 Friendly</button>
+    <div class="controls-card">
+      <div class="field">
+        <div class="section-label">Personality</div>
+        <div class="persona-row">
+          <button class="p-btn active" data-p="Cocky"      onclick="setPersonality(this)">😎 Cocky</button>
+          <button class="p-btn"        data-p="Aggressive" onclick="setPersonality(this)">⚔️ Aggressive</button>
+          <button class="p-btn"        data-p="Nervous"    onclick="setPersonality(this)">😰 Nervous</button>
+          <button class="p-btn"        data-p="Friendly"   onclick="setPersonality(this)">😊 Friendly</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Opponent Lichess Username</label>
+        <input type="text" id="opp-input" placeholder="e.g. rosaiju"
+               onkeydown="if(event.key==='Enter') startGame()" />
+      </div>
+
+      <div class="senserobot-row" id="senserobot-row">
+        <input type="checkbox" id="senserobot-mode" onchange="onSenseRobotToggle()" />
+        <label for="senserobot-mode">SenseRobot mode (physical board)</label>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn-primary" id="play-btn" onclick="startGame()">Play</button>
+        <button class="btn-rematch" id="rematch-btn" onclick="rematch()" style="display:none">↩ Rematch</button>
+      </div>
+
+      <div class="status-badge" id="status-badge"></div>
+
+      <div class="game-link" id="game-link">
+        <a id="game-link-a" href="#" target="_blank" rel="noreferrer">View on Lichess →</a>
+        <button class="small" onclick="copyUrl()">Copy URL</button>
       </div>
     </div>
 
-    <div class="field">
-      <label>Opponent Lichess Username</label>
-      <input type="text" id="opp-input" placeholder="e.g. rosaiju"
-             onkeydown="if(event.key==='Enter') startGame()" />
-    </div>
-
-    <div class="senserobot-row" id="senserobot-row">
-      <input type="checkbox" id="senserobot-mode" onchange="onSenseRobotToggle()" />
-      <label for="senserobot-mode">SenseRobot mode (physical board)</label>
-    </div>
-
-    <button class="btn-primary" id="play-btn" onclick="startGame()">Play</button>
-    <button class="btn-rematch" id="rematch-btn" onclick="rematch()" style="display:none">↩ Rematch</button>
-
-    <div class="status-badge" id="status-badge"></div>
-
-    <div class="game-link" id="game-link">
-      <a id="game-link-a" href="#" target="_blank" rel="noreferrer">View on Lichess →</a>
-      <button class="small" onclick="copyUrl()">Copy URL</button>
-    </div>
-
-    <div class="board-wrap">
-      <div class="chess-board" id="board"></div>
+    <div class="board-section">
+      <div class="board-wrap">
+        <div class="chess-board" id="board"></div>
+      </div>
     </div>
 
     <div id="game-info" style="display:none">
@@ -400,33 +523,33 @@
     <div class="log" id="log"></div>
   </div>
 
-  <!-- ── RIGHT: persona + chat ── -->
+  <!-- ── RIGHT: persona + chat + insights ── -->
   <div class="right">
 
     <div class="persona-display" id="persona-display">
       <div class="persona-avatar" id="pd-avatar">😎</div>
-      <div>
+      <div style="flex:1;min-width:0">
         <div class="persona-name" id="pd-name">Cocky</div>
         <div class="persona-desc" id="pd-desc">Overconfident, loves itself, belittles opponent</div>
       </div>
-    </div>
-
-    <div class="tts-row">
-      <button class="tts-toggle" id="tts-btn" onclick="toggleTTS()">🔊 Voice On</button>
-      <span>Browser TTS — quips are spoken aloud</span>
+      <div class="tts-row" style="flex-shrink:0">
+        <button class="tts-toggle" id="tts-btn" onclick="toggleTTS()">🔊 Voice</button>
+      </div>
     </div>
 
     <div class="chat-area" id="chat-area">
       <div class="chat-empty" id="chat-empty">Quips will appear here once the game starts.</div>
     </div>
 
-    <!-- ── Insights panel (shown after game ends) ── -->
+    <!-- ── Insights panel ── -->
     <div class="insights-section" id="insights-section">
       <div class="ins-header">
         <span class="ins-title" id="insights-title">Game Analysis</span>
         <span class="ins-loading" id="insights-loading">Loading…</span>
       </div>
       <div id="insights-body"></div>
+      <!-- review panel lives here, outside insights-body, so re-renders don't destroy it -->
+      <div id="review-panel" style="display:none"></div>
     </div>
 
   </div>
@@ -442,14 +565,18 @@
     Friendly:   { avatar: '😊', desc: 'Supportive coach, kind even after your blunders' },
   };
 
-  // ── Audio context — created + unlocked during Play button click ─────────────
+  const PIECES = {
+    K:'♔', Q:'♕', R:'♖', B:'♗', N:'♘', P:'♙',
+    k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟',
+  };
+  const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+  // ── Audio ────────────────────────────────────────────────────────────────────
   let _audioCtx = null;
 
   function _unlockAudio() {
-    // Must be called inside a user-gesture handler (e.g. button click)
     if (!_audioCtx || _audioCtx.state === 'closed') _audioCtx = new AudioContext();
     _audioCtx.resume();
-    // Play a silent 1-sample buffer to fully unlock on strict browsers
     const buf = _audioCtx.createBuffer(1, 1, 22050);
     const src = _audioCtx.createBufferSource();
     src.buffer = buf;
@@ -457,32 +584,18 @@
     src.start(0);
   }
 
-  const PIECES = {
-    K:'♔', Q:'♕', R:'♖', B:'♗', N:'♘', P:'♙',
-    k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟',
-  };
-  const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-
-  // ── State ────────────────────────────────────────────────────────────────────
-
+  // ── Game state ───────────────────────────────────────────────────────────────
   let currentPersonality = 'Cocky';
   let ttsMuted = false;
   let gameUrl = '';
-  let bubbleCount = 0;
   let lastOpponent = '';
-
-  // ── SenseRobot + game state ──────────────────────────────────────────────────
   let isSenseRobotMode = false;
-  let aiSide = 'black';  // set from 'started' event
-
-  // ── Board interaction state ──────────────────────────────────────────────────
-  let chess       = null;   // chess.js instance
-  let selectedSq  = null;   // currently selected square
-  let legalDests  = [];     // legal destination squares for selected piece
+  let aiSide = 'black';
+  let chess = null;
+  let selectedSq = null;
+  let legalDests = [];
   let isHumanTurn = false;
   let currentGameId = null;
-
-  // ── Account info (fetched on page load) ─────────────────────────────────────
   let accountInfo = null;
 
   async function loadAccountInfo() {
@@ -493,21 +606,17 @@
         document.getElementById('gi-bot').textContent   = accountInfo.bot_username || '—';
         document.getElementById('gi-human').textContent = accountInfo.senserobot_username || '—';
       }
-    } catch (e) {
-      // Non-critical — account info panel just stays empty
-    }
+    } catch (e) {}
   }
   loadAccountInfo();
 
   // ── SenseRobot toggle ────────────────────────────────────────────────────────
-
   function onSenseRobotToggle() {
     const checked = document.getElementById('senserobot-mode').checked;
     document.getElementById('senserobot-row').classList.toggle('active', checked);
   }
 
-  // ── Personality selector ─────────────────────────────────────────────────────
-
+  // ── Personality ──────────────────────────────────────────────────────────────
   function setPersonality(btn) {
     document.querySelectorAll('.p-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -519,7 +628,6 @@
   }
 
   // ── TTS ──────────────────────────────────────────────────────────────────────
-
   function toggleTTS() {
     ttsMuted = !ttsMuted;
     const btn = document.getElementById('tts-btn');
@@ -527,10 +635,9 @@
     btn.classList.toggle('muted', ttsMuted);
   }
 
-  // ── TTS queue — fetch edge-tts audio + ring-mod robot effect ────────────────
   const ttsQueue = [];
   let ttsSpeaking = false;
-  const _pendingSpeakTimers = [];   // setTimeout IDs for delayed speaks
+  const _pendingSpeakTimers = [];
 
   function speak(text, delayMs = 0) {
     if (ttsMuted) return;
@@ -538,10 +645,7 @@
       const id = setTimeout(() => {
         const idx = _pendingSpeakTimers.indexOf(id);
         if (idx !== -1) _pendingSpeakTimers.splice(idx, 1);
-        if (ttsQueue.length < 2) {
-          ttsQueue.push(text);
-          if (!ttsSpeaking) _processQueue();
-        }
+        if (ttsQueue.length < 2) { ttsQueue.push(text); if (!ttsSpeaking) _processQueue(); }
       }, delayMs);
       _pendingSpeakTimers.push(id);
       return;
@@ -570,30 +674,24 @@
         source.onended = resolve;
         source.onerror = resolve;
       });
-    } catch (e) {
-      console.warn('TTS error:', e);
-    }
+    } catch (e) { console.warn('TTS error:', e); }
     _processQueue();
   }
 
   function _resetTTS() {
-    // Cancel any pending delayed speaks
     _pendingSpeakTimers.forEach(id => clearTimeout(id));
     _pendingSpeakTimers.length = 0;
     ttsQueue.length = 0;
     ttsSpeaking = false;
-    // keep _audioCtx alive — unlocked by the Play button click
   }
 
   // ── Chat bubbles ─────────────────────────────────────────────────────────────
-
   const MAX_BUBBLES = 5;
   const BUBBLE_LIFETIME_MS = 20000;
 
   function addChatBubble(text, personality) {
     const area = document.getElementById('chat-area');
     document.getElementById('chat-empty').style.display = 'none';
-
     const bubble = document.createElement('div');
     bubble.className = 'bubble';
     bubble.dataset.p = personality;
@@ -603,21 +701,14 @@
     `;
     area.appendChild(bubble);
     area.scrollTop = area.scrollHeight;
-
-    // Remove old bubbles beyond MAX
     const all = area.querySelectorAll('.bubble');
-    if (all.length > MAX_BUBBLES) {
-      all[0].remove();
-    }
-
-    // Fade out after lifetime
+    if (all.length > MAX_BUBBLES) all[0].remove();
     setTimeout(() => {
       bubble.classList.add('fading');
       setTimeout(() => {
         if (bubble.parentNode) bubble.remove();
-        if (area.querySelectorAll('.bubble').length === 0) {
+        if (area.querySelectorAll('.bubble').length === 0)
           document.getElementById('chat-empty').style.display = '';
-        }
       }, 600);
     }, BUBBLE_LIFETIME_MS);
   }
@@ -626,52 +717,28 @@
     return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
-  // ── Chess board ──────────────────────────────────────────────────────────────
-
-  // Expand FEN rank string into array of 8 piece chars (null = empty)
+  // ── Chess board (main game) ──────────────────────────────────────────────────
   function expandRank(rankStr) {
     const out = [];
     for (const ch of rankStr) {
-      if (ch >= '1' && ch <= '8') {
-        for (let i = 0; i < +ch; i++) out.push(null);
-      } else {
-        out.push(ch);
-      }
+      if (ch >= '1' && ch <= '8') for (let i = 0; i < +ch; i++) out.push(null);
+      else out.push(ch);
     }
     return out;
   }
 
-  // Render board from the given perspective.
-  // blackPerspective=true : rank 1 at top, file h on left  (human sits as Black)
-  // blackPerspective=false: rank 8 at top, file a on left  (human sits as White)
   function renderBoard(fen, blackPerspective = true) {
     const el = document.getElementById('board');
     const placement = (fen || START_FEN).split(' ')[0];
     const ranks = placement.split('/');
     el.innerHTML = '';
-
     for (let displayRow = 0; displayRow < 8; displayRow++) {
       let fenIdx, rankNum;
-      if (blackPerspective) {
-        // rank 1 at top: displayRow 0 → rank1 → FEN index 7
-        fenIdx  = 7 - displayRow;
-        rankNum = displayRow + 1;
-      } else {
-        // rank 8 at top: displayRow 0 → rank8 → FEN index 0
-        fenIdx  = displayRow;
-        rankNum = 8 - displayRow;
-      }
+      if (blackPerspective) { fenIdx = 7 - displayRow; rankNum = displayRow + 1; }
+      else                  { fenIdx = displayRow;      rankNum = 8 - displayRow; }
       const pieces = expandRank(ranks[fenIdx]);
-
       for (let displayCol = 0; displayCol < 8; displayCol++) {
-        let fileIdx;
-        if (blackPerspective) {
-          // file h on left: displayCol 0 → file h (index 7)
-          fileIdx = 7 - displayCol;
-        } else {
-          // file a on left: displayCol 0 → file a (index 0)
-          fileIdx = displayCol;
-        }
+        const fileIdx = blackPerspective ? (7 - displayCol) : displayCol;
         const fileChar = String.fromCharCode(97 + fileIdx);
         const squareId = fileChar + rankNum;
         const isLight  = (displayRow + displayCol) % 2 === 0;
@@ -697,18 +764,12 @@
 
   renderBoard(START_FEN, false);
 
-  // ── Board click logic ────────────────────────────────────────────────────────
-
   function handleSquareClick(sq) {
-    // Disable clicks in SenseRobot mode — physical board handles moves
     if (isSenseRobotMode) return;
     if (!isHumanTurn || !currentGameId || !chess) return;
-
     const piece = chess.get(sq);
-
     if (selectedSq) {
       if (legalDests.includes(sq)) {
-        // Build UCI — auto-promote to queen
         let uci = selectedSq + sq;
         const moving = chess.get(selectedSq);
         if (moving && moving.type === 'p') {
@@ -721,29 +782,24 @@
       }
       clearSelection();
     }
-
-    // Select the human's piece (color depends on which side the human plays)
     const humanColor = aiSide === 'black' ? 'w' : 'b';
     if (piece && piece.color === humanColor) {
-      selectedSq  = sq;
-      legalDests  = chess.moves({ square: sq, verbose: true }).map(m => m.to);
+      selectedSq = sq;
+      legalDests = chess.moves({ square: sq, verbose: true }).map(m => m.to);
       highlightSquares();
     }
   }
 
   function clearSelection() {
-    selectedSq = null;
-    legalDests = [];
-    document.querySelectorAll('.sq').forEach(s => {
-      s.classList.remove('selected', 'legal-move');
-    });
+    selectedSq = null; legalDests = [];
+    document.querySelectorAll('.sq').forEach(s => s.classList.remove('selected', 'legal-move'));
   }
 
   function highlightSquares() {
     document.querySelectorAll('.sq').forEach(s => {
       const id = s.dataset.square;
-      s.classList.toggle('selected',    id === selectedSq);
-      s.classList.toggle('legal-move',  legalDests.includes(id));
+      s.classList.toggle('selected',   id === selectedSq);
+      s.classList.toggle('legal-move', legalDests.includes(id));
     });
   }
 
@@ -751,58 +807,37 @@
     isHumanTurn = false;
     try {
       const res = await fetch('/move', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ game_id: currentGameId, uci }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setStatus(`Invalid move: ${data.detail}`, 'red');
-        isHumanTurn = true;
-      }
-    } catch (err) {
-      setStatus(`Move error: ${err.message}`, 'red');
-      isHumanTurn = true;
-    }
+      if (!res.ok) { setStatus(`Invalid move: ${data.detail}`, 'red'); isHumanTurn = true; }
+    } catch (err) { setStatus(`Move error: ${err.message}`, 'red'); isHumanTurn = true; }
   }
 
   // ── Status helper ─────────────────────────────────────────────────────────────
-
   function setStatus(text, color) {
     const el = document.getElementById('status-badge');
-    el.textContent = text;
-    el.className = 'status-badge ' + color;
-    el.style.display = 'flex';
+    el.textContent = text; el.className = 'status-badge ' + color; el.style.display = 'flex';
   }
-
-  function hideStatus() {
-    document.getElementById('status-badge').style.display = 'none';
-  }
+  function hideStatus() { document.getElementById('status-badge').style.display = 'none'; }
 
   // ── Log ──────────────────────────────────────────────────────────────────────
-
   function addLog(line) {
     const el = document.getElementById('log');
     const d = document.createElement('div');
-    d.textContent = line;
-    el.appendChild(d);
-    el.scrollTop = el.scrollHeight;
+    d.textContent = line; el.appendChild(d); el.scrollTop = el.scrollHeight;
   }
 
-  // ── Game link ─────────────────────────────────────────────────────────────────
-
+  // ── Game link ──────────────────────────────────────────────────────────────
   function setGameLink(url) {
     gameUrl = url;
     document.getElementById('game-link').style.display = 'flex';
     document.getElementById('game-link-a').href = url;
   }
-
-  async function copyUrl() {
-    await navigator.clipboard.writeText(gameUrl);
-  }
+  async function copyUrl() { await navigator.clipboard.writeText(gameUrl); }
 
   // ── Main event handler ───────────────────────────────────────────────────────
-
   function handleEvent(e) {
     switch (e.type) {
       case 'mode':
@@ -812,25 +847,17 @@
           setStatus('SenseRobot mode — moves submitted by physical board', 'blue');
         }
         break;
-
       case 'challenging':
         setStatus(`Challenging ${e.opponent}…`, 'blue'); break;
-
       case 'waiting':
         currentGameId = e.gameId;
         setStatus(`Waiting for ${e.opponent} to accept…`, 'blue');
-        setGameLink(e.url);
-        addLog(`Challenge sent → ${e.url}`); break;
-
+        setGameLink(e.url); addLog(`Challenge sent → ${e.url}`); break;
       case 'started':
-        currentGameId = e.gameId;
-        lastOpponent  = e.opponent;
-        aiSide        = e.ai_side || 'black';
+        currentGameId = e.gameId; lastOpponent = e.opponent; aiSide = e.ai_side || 'black';
         chess = new Chess();
-        // Orient board from the physical player's perspective
-        const blackPov = (aiSide === 'white');  // human plays black → black pov
+        const blackPov = (aiSide === 'white');
         renderBoard(START_FEN, blackPov);
-        // Update game info panel
         document.getElementById('gi-color').textContent = aiSide;
         document.getElementById('game-info').style.display = '';
         if (isSenseRobotMode) {
@@ -840,85 +867,48 @@
           setStatus(`Game started! You are ${humanSideLabel} — click your pieces to move.`, 'green');
         }
         addLog(`${e.opponent} accepted. Game: ${e.url}`); break;
-
       case 'declined':
-        setStatus(`Challenge declined by ${e.opponent}.`, 'red');
-        addLog('Challenge declined.'); break;
-
+        setStatus(`Challenge declined by ${e.opponent}.`, 'red'); addLog('Challenge declined.'); break;
       case 'timeout':
-        setStatus('Challenge timed out.', 'amber');
-        addLog('Challenge timed out.'); break;
-
+        setStatus('Challenge timed out.', 'amber'); addLog('Challenge timed out.'); break;
       case 'thinking':
         setStatus('Chess Persona is thinking…', 'blue'); break;
-
       case 'fen': {
         if (chess) chess.load(e.fen);
         const blackPov2 = (aiSide === 'white');
         renderBoard(e.fen, blackPov2);
         clearSelection();
-
-        const toMove = e.fen.split(' ')[1]; // 'w' or 'b'
-        const isPhysicalTurn = (toMove === 'w' && aiSide === 'black') ||
-                               (toMove === 'b' && aiSide === 'white');
-
+        const toMove = e.fen.split(' ')[1];
+        const isPhysicalTurn = (toMove === 'w' && aiSide === 'black') || (toMove === 'b' && aiSide === 'white');
         if (isSenseRobotMode) {
           isHumanTurn = false;
           document.getElementById('board').classList.remove('human-turn');
-          setStatus(
-            isPhysicalTurn
-              ? 'Your turn — move on the physical board.'
-              : 'Chess Persona is thinking…',
-            isPhysicalTurn ? 'green' : 'blue'
-          );
+          setStatus(isPhysicalTurn ? 'Your turn — move on the physical board.' : 'Chess Persona is thinking…', isPhysicalTurn ? 'green' : 'blue');
         } else {
           isHumanTurn = isPhysicalTurn;
           document.getElementById('board').classList.toggle('human-turn', isHumanTurn);
-          if (isPhysicalTurn) {
-            const label = aiSide === 'black' ? 'White' : 'Black';
-            setStatus(`${label} to move…`, 'green');
-          }
+          if (isPhysicalTurn) { const label = aiSide === 'black' ? 'White' : 'Black'; setStatus(`${label} to move…`, 'green'); }
         }
         break;
       }
-
       case 'move':
         setStatus(`Chess Persona played: ${e.uci} (move ${e.moveNum})`, 'green');
-        addLog(`Chess Persona: ${e.uci} (move ${e.moveNum})`);
-        break;
-
+        addLog(`Chess Persona: ${e.uci} (move ${e.moveNum})`); break;
       case 'quip': {
         addChatBubble(e.text, e.personality);
         const captureDelay = (isSenseRobotMode && e.capture === true) ? 5000 : 0;
-        console.log('[QUIP]', JSON.stringify({
-          text: e.text.slice(0, 40),
-          capture: e.capture,
-          captureType: typeof e.capture,
-          isSenseRobotMode,
-          captureDelay,
-        }));
-        speak(e.text, captureDelay);
-        break;
+        speak(e.text, captureDelay); break;
       }
-
       case 'error':
-        setStatus(`Error: ${e.text}`, 'red');
-        addLog(`Error: ${e.text}`);
+        setStatus(`Error: ${e.text}`, 'red'); addLog(`Error: ${e.text}`);
         document.getElementById('play-btn').disabled = false;
         document.getElementById('play-btn').textContent = 'Play';
-        document.getElementById('opp-input').disabled = false;
-        break;
-
+        document.getElementById('opp-input').disabled = false; break;
       case 'done': {
-        _resetTTS();  // cancel any pending delayed quips
-        const aiWon    = (aiSide === 'white' && e.result === '1-0') ||
-                         (aiSide === 'black' && e.result === '0-1');
-        const humanWon = (aiSide === 'white' && e.result === '0-1') ||
-                         (aiSide === 'black' && e.result === '1-0');
-        const resultText = aiWon ? '✓ Chess Persona wins!'
-                         : humanWon ? '✓ You win!'
-                         : e.result === '1/2-1/2' ? '½ Draw'
-                         : `Game over (${e.status})`;
+        _resetTTS();
+        const aiWon    = (aiSide === 'white' && e.result === '1-0') || (aiSide === 'black' && e.result === '0-1');
+        const humanWon = (aiSide === 'white' && e.result === '0-1') || (aiSide === 'black' && e.result === '1-0');
+        const resultText = aiWon ? '✓ Chess Persona wins!' : humanWon ? '✓ You win!' : e.result === '1/2-1/2' ? '½ Draw' : `Game over (${e.status})`;
         setStatus(resultText, aiWon ? 'amber' : 'green');
         addLog(`Game over: ${e.result || e.status}`);
         if (e.url) setGameLink(e.url);
@@ -926,15 +916,13 @@
         document.getElementById('play-btn').textContent = 'Play Again';
         document.getElementById('opp-input').disabled = false;
         if (lastOpponent) document.getElementById('rematch-btn').style.display = '';
-        loadInsights(lastOpponent || null);
-        break;
+        loadInsights(lastOpponent || null); break;
       }
     }
   }
 
   // ── Insights ─────────────────────────────────────────────────────────────────
-
-  async function loadInsights(opponent) {
+  async function loadInsights(opponent, _pollCount = 0) {
     const section = document.getElementById('insights-section');
     const loading = document.getElementById('insights-loading');
     const body    = document.getElementById('insights-body');
@@ -952,6 +940,17 @@
       const d = await res.json();
       loading.style.display = 'none';
       body.innerHTML = renderInsights(d);
+
+      // Restore active row highlight if a review is open (re-render destroys class)
+      if (_openReviewId) {
+        const row = document.getElementById(`row-${_openReviewId}`);
+        if (row) row.classList.add('active');
+      }
+
+      const hasPending = (d.recent_games || []).some(g => !g.analysis_done);
+      if (hasPending && _pollCount < 18) {
+        setTimeout(() => loadInsights(opponent, _pollCount + 1), 10000);
+      }
     } catch (e) {
       loading.textContent = 'Could not load insights.';
     }
@@ -959,20 +958,19 @@
 
   function renderInsights(d) {
     if (!d.games_played) {
-      return `<div style="padding:20px 16px;text-align:center;color:#333;font-size:0.82rem">No games recorded yet.</div>`;
+      return `<div style="padding:24px 16px;text-align:center;color:#9c8d82;font-size:0.82rem">No games recorded yet.</div>`;
     }
 
     const winRate = Math.round((d.win_rate || 0) * 100);
     const bp = d.phase_breakdown || {};
     const phases = ['opening', 'middlegame', 'endgame'];
 
-    // Phase bars — scale to max combined blunders+mistakes
     const phaseTotals = phases.map(p => (bp[p]?.blunders || 0) + (bp[p]?.mistakes || 0));
     const maxTotal = Math.max(...phaseTotals, 1);
     const worstIdx = phaseTotals.indexOf(Math.max(...phaseTotals));
 
     const phaseHtml = phases.map((ph, i) => {
-      const p   = bp[ph] || {};
+      const p = bp[ph] || {};
       const tot = phaseTotals[i];
       const pct = Math.round((tot / maxTotal) * 100);
       const isWorst = i === worstIdx && tot > 0;
@@ -985,25 +983,24 @@
       </div>`;
     }).join('');
 
-    // Recent games
-    const recentHtml = (d.recent_games || []).slice(0, 4).map(g => {
+    const recentHtml = (d.recent_games || []).slice(0, 5).map(g => {
       const date     = g.played_at ? g.played_at.slice(0, 10) : '—';
       const resLabel = g.result === 'win' ? 'W' : g.result === 'loss' ? 'L' : 'D';
       const resClass = g.result || 'draw';
       const stats    = `${g.blunders}B · ${g.mistakes}M`;
       const accHtml  = g.analysis_done && g.accuracy_human != null
         ? `<span class="rr-acc"><span>${g.accuracy_human}%</span> acc</span>`
-        : `<span class="rr-acc" style="color:#222">—</span>`;
-      const reviewLink = `<a class="review-link" href="/review/${g.game_id}">Review ↗</a>`;
-      const lichessLink = `<a class="lichess-link" href="${g.url}" target="_blank" rel="noreferrer">Lichess ↗</a>`;
-      return `<div class="ins-recent-row">
+        : g.analysis_done
+          ? `<span class="rr-acc" style="color:#b0a490">—</span>`
+          : `<span class="rr-acc" style="color:#9c8d82;font-style:italic">analyzing…</span>`;
+      return `<div class="ins-recent-row ${resClass}" id="row-${g.game_id}" onclick="openGameReview('${g.game_id}')">
         <span class="rr-date">${date}</span>
         <span class="rr-res ${resClass}">${resLabel}</span>
         <span class="rr-stats">${stats}</span>
         ${accHtml}
-        <span class="rr-links">${reviewLink} ${lichessLink}</span>
+        <span class="rr-open">▶ review</span>
       </div>`;
-    }).join('') || `<div style="padding:8px 10px;background:#111;border-radius:6px;font-size:0.75rem;color:#333">No completed games yet.</div>`;
+    }).join('') || `<div style="padding:10px;color:#9c8d82;font-size:0.75rem">No completed games yet.</div>`;
 
     const bpg = (d.per_game?.blunders   ?? 0).toFixed(1);
     const mpg = (d.per_game?.mistakes   ?? 0).toFixed(1);
@@ -1037,30 +1034,354 @@
       </div>
 
       <div>
-        <div class="ins-slabel">Mistakes by phase <span style="color:#252525;font-size:0.6rem;margin-left:4px">B = blunders &nbsp; M = mistakes</span></div>
+        <div class="ins-slabel">Mistakes by phase <span style="color:#b0a490;font-size:0.58rem;margin-left:4px">B=blunders M=mistakes</span></div>
         <div class="ins-phases">${phaseHtml}</div>
       </div>
 
       <div>
-        <div class="ins-slabel">Recent games</div>
-        <div class="ins-recent">${recentHtml}</div>
+        <div class="ins-slabel">Recent games — click any row to review</div>
+        <div class="ins-recent" id="recent-games-list">${recentHtml}</div>
       </div>
     </div>`;
   }
 
-  // ── Start game ────────────────────────────────────────────────────────────────
+  // ── Inline review panel ──────────────────────────────────────────────────────
 
-  function rematch() {
-    document.getElementById('opp-input').value = lastOpponent;
-    startGame();
+  let _openReviewId = null;
+  let _rvMoves = [];
+  let _rvPly = 0;
+  let _coachingPollTimer = null;
+
+  function openGameReview(gameId) {
+    // Toggle closed if same game clicked again
+    if (_openReviewId === gameId) { closeReview(); return; }
+    _openReviewId = gameId;
+
+    // Mark row as active
+    document.querySelectorAll('.ins-recent-row').forEach(r => r.classList.remove('active'));
+    const row = document.getElementById(`row-${gameId}`);
+    if (row) row.classList.add('active');
+
+    const panel = document.getElementById('review-panel');
+    if (!panel) return;
+    panel.style.display = '';
+    panel.innerHTML = `<div class="rv-loading">Loading game…</div>`;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    clearTimeout(_coachingPollTimer);
+    _rvMoves = []; _rvPly = 0;
+
+    fetch(`/game/${gameId}`)
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(data => { _rvMoves = data.moves || []; renderReviewPanel(data.game, panel, gameId); })
+      .catch(err => { panel.innerHTML = `<div class="rv-loading" style="color:#8b1a1a">Failed to load game (${err.message})</div>`; });
   }
+
+  function closeReview() {
+    _openReviewId = null;
+    clearTimeout(_coachingPollTimer);
+    const panel = document.getElementById('review-panel');
+    if (panel) panel.style.display = 'none';
+    document.querySelectorAll('.ins-recent-row').forEach(r => r.classList.remove('active'));
+  }
+
+  function renderReviewPanel(game, panel, gameId) {
+    const hasFens = _rvMoves.length > 0 && _rvMoves[0].fen_after != null;
+    const canReview = game.analysis_done && hasFens;
+    _rvPly = 0;
+
+    const whitePlayer = game.ai_color === 'white' ? 'AI' : (game.opponent || '?');
+    const blackPlayer = game.ai_color === 'black' ? 'AI' : (game.opponent || '?');
+    const resLabel = game.result === '1/2-1/2' ? '½–½' : game.result === '1-0' ? '1–0' : game.result === '0-1' ? '0–1' : (game.result || '?');
+    const humanRes = game.human_result || 'draw';
+    const dateStr = game.played_at ? new Date(game.played_at).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' }) : '';
+
+    const accHtml = game.analysis_done ? `
+      <div class="rv-acc-row">
+        <span class="rv-acc-pill human">Human ${game.accuracy_human ?? '—'}%</span>
+        <span class="rv-acc-pill ai">AI ${game.accuracy_ai ?? '—'}%</span>
+      </div>` : '';
+
+    const boardHtml = hasFens ? buildRvBoard(_rvMoves, _rvPly) : '';
+    const movesHtml = buildRvMoves(_rvMoves, _rvPly, canReview);
+
+    const evalPct = hasFens ? evalPercent(0) : 50;
+
+    panel.innerHTML = `
+      <div class="rv-header">
+        <div class="rv-header-info">
+          <div class="rv-players">
+            <span>♔ ${escapeHtml(whitePlayer)}</span>
+            <span style="color:#9c8d82">vs</span>
+            <span>♚ ${escapeHtml(blackPlayer)}</span>
+            <span class="rv-result-badge ${humanRes}">${resLabel}</span>
+          </div>
+          <div class="rv-meta">${dateStr}${game.personality ? ' · ' + game.personality : ''}${game.total_plies ? ' · ' + game.total_plies + ' moves' : ''}</div>
+          ${accHtml}
+        </div>
+        <button class="rv-close-btn" onclick="closeReview()">✕ Close</button>
+      </div>
+
+      ${hasFens ? `
+      <div class="rv-body">
+        <div class="rv-board-col">
+          <div class="rv-eval-bar" id="rv-eval-bar" style="height:260px">
+            <div class="rv-eval-white" id="rv-eval-fill" style="height:${evalPct}%"></div>
+          </div>
+          <div class="rv-board-wrap">
+            <div class="rv-board" id="rv-board">${boardHtml}</div>
+            <div class="rv-nav">
+              <button class="rv-nav-btn" id="rv-nav-first" title="Start">⏮</button>
+              <button class="rv-nav-btn" id="rv-nav-prev"  title="Previous">◀</button>
+              <button class="rv-nav-btn" id="rv-nav-next"  title="Next">▶</button>
+              <button class="rv-nav-btn" id="rv-nav-last"  title="End">⏭</button>
+            </div>
+          </div>
+        </div>
+        <div class="rv-moves-col">
+          <div class="rv-moves-header">Moves</div>
+          <div class="rv-moves-list" id="rv-moves-list">${movesHtml}</div>
+        </div>
+      </div>` : `
+      <div style="padding:12px 14px">
+        <div class="rv-moves-col">
+          <div class="rv-moves-header">Moves</div>
+          <div class="rv-moves-list" id="rv-moves-list" style="border-radius:0 0 6px 6px">${movesHtml}</div>
+        </div>
+      </div>`}
+
+      <div class="rv-coaching" id="rv-coaching-card"></div>
+    `;
+
+    // Wire board navigation
+    if (hasFens) {
+      const boardEl = document.getElementById('rv-board');
+      const barEl   = document.getElementById('rv-eval-bar');
+      if (boardEl && barEl) {
+        const ro = new ResizeObserver(() => { barEl.style.height = boardEl.offsetWidth + 'px'; });
+        ro.observe(boardEl);
+        barEl.style.height = boardEl.offsetWidth + 'px';
+      }
+
+      document.getElementById('rv-nav-first').onclick = () => rvGoTo(0);
+      document.getElementById('rv-nav-prev').onclick  = () => rvGoTo(_rvPly - 1);
+      document.getElementById('rv-nav-next').onclick  = () => rvGoTo(_rvPly + 1);
+      document.getElementById('rv-nav-last').onclick  = () => rvGoTo(_rvMoves.length);
+
+      document.getElementById('rv-moves-list').addEventListener('click', ev => {
+        const cell = ev.target.closest('.rv-move-cell[data-ply]');
+        if (cell) rvGoTo(+cell.dataset.ply);
+      });
+    }
+
+    // Auto-start coaching
+    rvInitCoaching(game, gameId);
+  }
+
+  function rvGoTo(ply) {
+    _rvPly = Math.max(0, Math.min(_rvMoves.length, ply));
+    const fen = _rvPly === 0 ? START_FEN : _rvMoves[_rvPly - 1].fen_after;
+    const lm  = _rvPly === 0 ? null : _rvMoves[_rvPly - 1].uci;
+    const cp  = _rvPly === 0 ? 0 : (_rvMoves[_rvPly - 1].cp_white ?? 0);
+
+    const boardEl = document.getElementById('rv-board');
+    if (boardEl) boardEl.innerHTML = buildRvBoard(_rvMoves, _rvPly);
+
+    const fill = document.getElementById('rv-eval-fill');
+    if (fill) fill.style.height = evalPercent(cp) + '%';
+
+    document.querySelectorAll('.rv-move-cell').forEach(el => {
+      el.classList.toggle('active', +el.dataset.ply === _rvPly);
+    });
+    const active = document.querySelector('.rv-move-cell.active');
+    if (active) active.scrollIntoView({ block: 'nearest' });
+  }
+
+  function fenToGrid(fen) {
+    const grid = [];
+    for (const row of fen.split(' ')[0].split('/')) {
+      const line = [];
+      for (const ch of row) {
+        if (ch >= '1' && ch <= '8') for (let i = 0; i < +ch; i++) line.push(null);
+        else line.push(ch);
+      }
+      grid.push(line);
+    }
+    return grid;
+  }
+
+  function buildRvBoard(moves, ply) {
+    const fen = ply === 0 ? START_FEN : moves[ply - 1].fen_after;
+    const lm  = ply === 0 ? null : moves[ply - 1].uci;
+    const grid = fenToGrid(fen);
+    let html = '';
+    for (let r = 0; r < 8; r++) {
+      for (let f = 0; f < 8; f++) {
+        const isLight = (r + f) % 2 === 0;
+        const piece = grid[r][f];
+        const sq = String.fromCharCode(97 + f) + (8 - r);
+        let extra = '';
+        if (lm && (sq === lm.slice(0, 2) || sq === lm.slice(2, 4))) extra = ' active';
+        const fileLabel = r === 7 ? `<span class="rv-sq-label file">${String.fromCharCode(97+f)}</span>` : '';
+        const rankLabel = f === 0 ? `<span class="rv-sq-label rank">${8-r}</span>` : '';
+        html += `<div class="rv-sq ${isLight?'light':'dark'}${extra}">${rankLabel}${fileLabel}${piece ? (PIECES[piece] || '') : ''}</div>`;
+      }
+    }
+    return html;
+  }
+
+  function evalPercent(cpWhite) {
+    if (cpWhite == null) return 50;
+    if (cpWhite >= 10000)  return 97;
+    if (cpWhite <= -10000) return 3;
+    return 50 + (Math.max(-800, Math.min(800, cpWhite)) / 800) * 44;
+  }
+
+  function classifyMove(m) {
+    if (m.cp_loss == null) return null;
+    if (m.cp_loss >= 10000) return { label: '??', cls: 'blunder',    title: 'Blunder (allowed or missed checkmate)' };
+    if (m.cp_loss === 0)    return { label: '!',  cls: 'excellent',  title: 'Best move' };
+    if (m.cp_loss <= 25)    return { label: '✓',  cls: 'excellent',  title: 'Excellent' };
+    if (m.cp_loss <= 75)    return { label: '⁇',  cls: 'inaccuracy', title: `Inaccuracy (−${m.cp_loss}cp)` };
+    if (m.cp_loss <= 200)   return { label: '?',  cls: 'mistake',    title: `Mistake (−${m.cp_loss}cp)` };
+    return                         { label: '??', cls: 'blunder',   title: `Blunder (−${m.cp_loss}cp)` };
+  }
+
+  function buildRvMoves(moves, activePly, canReview) {
+    let html = '';
+    for (let i = 0; i < moves.length; i += 2) {
+      const w = moves[i], b = moves[i + 1] || null;
+      const moveNum = Math.ceil(w.ply / 2);
+      const wBadge  = canReview ? classifyMove(w) : null;
+      const bBadge  = canReview && b ? classifyMove(b) : null;
+
+      function cell(m, badge) {
+        if (!m) return '<div class="rv-move-cell" style="flex:1;border-left:1px solid #141414"></div>';
+        const san = m.san || m.uci;
+        const isActive = m.ply === activePly;
+        const lossClass = m.cp_loss != null && m.cp_loss > 200 ? 'bad' : m.cp_loss != null && m.cp_loss > 75 ? 'warn' : '';
+        const lossStr = canReview && m.cp_loss != null && m.cp_loss > 0
+          ? (m.cp_loss >= 10000 ? 'Mate' : `−${m.cp_loss}`)
+          : '';
+        const badgeHtml = badge ? `<span class="rv-move-badge rv-badge-${badge.cls}" title="${badge.title}">${badge.label}</span>` : '';
+        return `<div class="rv-move-cell${isActive?' active':''}" data-ply="${m.ply}">
+          <span class="rv-move-san">${san}</span>${badgeHtml}
+          ${lossStr ? `<span class="rv-move-loss ${lossClass}">${lossStr}</span>` : ''}
+        </div>`;
+      }
+
+      html += `<div class="rv-move-pair">
+        <span class="rv-move-num">${moveNum}.</span>
+        ${cell(w, wBadge)}${cell(b, bBadge)}
+      </div>`;
+    }
+    return html || '<div style="padding:12px;color:#9c8d82;font-size:0.75rem">No moves recorded.</div>';
+  }
+
+  // ── Coaching (inline) ────────────────────────────────────────────────────────
+
+  const SECTION_META = {
+    'Game Summary':        { cls: '',           icon: '♟' },
+    'What You Did Well':   { cls: 's-well',     icon: '✓' },
+    'Key Mistakes':        { cls: 's-mistakes', icon: '✗' },
+    'Patterns I Noticed':  { cls: 's-patterns', icon: '◈' },
+    'Focus for Next Game': { cls: 's-focus',    icon: '→' },
+  };
+
+  function renderCoachingText(text) {
+    const sections = [];
+    let current = null;
+    for (const line of text.split('\n')) {
+      if (line.startsWith('## ')) {
+        if (current) sections.push(current);
+        current = { heading: line.slice(3).trim(), lines: [] };
+      } else if (current) {
+        current.lines.push(line);
+      }
+    }
+    if (current) sections.push(current);
+    if (!sections.length) {
+      return `<div class="rv-coaching-section"><p>${text.replace(/\n\n/g,'</p><p>').replace(/\n/g,' ')}</p></div>`;
+    }
+    return sections.map(s => {
+      const meta = SECTION_META[s.heading] || { cls: '', icon: '' };
+      const body = s.lines.join('\n').trim().split(/\n\n+/).filter(p => p.trim())
+        .map(p => `<p>${p.replace(/\n/g,' ')}</p>`).join('');
+      return `<div class="rv-coaching-section">
+        <h3 class="${meta.cls}">${meta.icon ? meta.icon + ' ' : ''}${s.heading}</h3>${body}
+      </div>`;
+    }).join('');
+  }
+
+  function setCoachingState(state) {
+    const card = document.getElementById('rv-coaching-card');
+    if (!card) return;
+    let bodyHtml = '';
+    if (state === 'loading') {
+      bodyHtml = `<div class="rv-coaching-thinking">Generating AI coaching review…</div>`;
+    } else if (state === 'pending') {
+      bodyHtml = `<div class="rv-coaching-thinking">Waiting for Stockfish analysis to complete…</div>`;
+    } else if (state === 'error') {
+      bodyHtml = `<div class="rv-coaching-error">Could not generate review. Check that GEMINI_API_KEY is set.</div>`;
+    } else if (typeof state === 'string' && state.length > 10) {
+      bodyHtml = `<div class="rv-coaching-body">${renderCoachingText(state)}</div>`;
+    }
+    card.innerHTML = `
+      <div class="rv-coaching-header">
+        <div class="rv-coaching-title">✦ AI Coaching Review <span class="rv-coaching-badge">Gemini</span></div>
+      </div>
+      ${bodyHtml}
+    `;
+  }
+
+  async function rvPollCoaching(gameId) {
+    if (_openReviewId !== gameId) return;
+    try {
+      const resp = await fetch(`/review/${gameId}/coaching`);
+      const data = await resp.json();
+      if (data.done && data.review) {
+        setCoachingState(data.review);
+      } else {
+        _coachingPollTimer = setTimeout(() => rvPollCoaching(gameId), 2500);
+      }
+    } catch {
+      setCoachingState('error');
+    }
+  }
+
+  async function rvInitCoaching(game, gameId) {
+    if (!game.analysis_done) {
+      setCoachingState('pending');
+      return;
+    }
+    // Already done
+    if (game.ai_review_done && game.ai_review) {
+      setCoachingState(game.ai_review);
+      return;
+    }
+    // Not done — auto-trigger generation
+    setCoachingState('loading');
+    try {
+      const resp = await fetch(`/review/${gameId}/coaching`, { method: 'POST' });
+      const data = await resp.json();
+      if (data.status === 'already_done' && data.review) {
+        setCoachingState(data.review);
+      } else {
+        rvPollCoaching(gameId);
+      }
+    } catch {
+      setCoachingState('error');
+    }
+  }
+
+  // ── Start game ────────────────────────────────────────────────────────────────
+  function rematch() { document.getElementById('opp-input').value = lastOpponent; startGame(); }
 
   async function startGame() {
     const opponent = document.getElementById('opp-input').value.trim();
     if (!opponent) { document.getElementById('opp-input').focus(); return; }
 
     const senseRobotChecked = document.getElementById('senserobot-mode').checked;
-
     document.getElementById('play-btn').disabled = true;
     document.getElementById('play-btn').textContent = 'Connecting…';
     document.getElementById('opp-input').disabled = true;
@@ -1072,30 +1393,20 @@
     document.getElementById('insights-section').classList.remove('visible');
     document.querySelectorAll('.bubble').forEach(b => b.remove());
     hideStatus();
-    chess = null;
-    isHumanTurn = false;
-    isSenseRobotMode = false;
-    aiSide = 'black';
-    currentGameId = null;
-    clearSelection();
-    _resetTTS();
-    _unlockAudio();   // must happen during the button-click user gesture
+    chess = null; isHumanTurn = false; isSenseRobotMode = false;
+    aiSide = 'black'; currentGameId = null;
+    clearSelection(); _resetTTS(); _unlockAudio();
+    closeReview();
     const boardEl = document.getElementById('board');
     boardEl.classList.remove('human-turn', 'view-only');
     renderBoard(START_FEN, false);
 
     try {
       const res = await fetch('/play', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          opponent,
-          personality: currentPersonality,
-          senserobot_mode: senseRobotChecked,
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ opponent, personality: currentPersonality, senserobot_mode: senseRobotChecked }),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
-
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let buf = '';
@@ -1110,8 +1421,7 @@
         }
       }
     } catch (err) {
-      setStatus(`Error: ${err.message}`, 'red');
-      addLog(`Error: ${err.message}`);
+      setStatus(`Error: ${err.message}`, 'red'); addLog(`Error: ${err.message}`);
       document.getElementById('play-btn').disabled = false;
       document.getElementById('play-btn').textContent = 'Play';
       document.getElementById('opp-input').disabled = false;
