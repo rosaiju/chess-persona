@@ -18,6 +18,7 @@ from lichess.api import (
     LICHESS_BOT_USERNAME,
 )
 from persona.personality import get_quip
+from analytics.db import record_game_start, record_move, record_game_end
 
 STOCKFISH_PATH = (
     shutil.which("stockfish")
@@ -220,6 +221,8 @@ async def play_game(
             "physical_player_side": "black" if ai_side == chess.WHITE else "white",
         }
 
+        record_game_start(game_id, opponent_username, personality, color)
+
         # Game start quip
         quip = get_quip(personality, "game_start")
         if quip:
@@ -265,6 +268,7 @@ async def play_game(
                 quip = get_quip(personality, trigger)
                 if quip:
                     yield {"type": "quip", "text": quip, "personality": personality, "capture": False}
+                record_game_end(game_id, final_board.result(), len(server_moves))
                 yield {
                     "type": "done",
                     "status": status,
@@ -302,6 +306,9 @@ async def play_game(
                     "robot_winning", "human_winning", "endgame"
                 ):
                     last_positional_at = total_moves
+
+                record_move(game_id, total_moves, uci, eval_before, eval_after,
+                            trigger, is_ai_move, is_capture, board.is_check())
 
                 if trigger:
                     quip = get_quip(personality, trigger)
@@ -350,6 +357,9 @@ async def play_game(
                 if trigger and trigger in ("robot_winning", "endgame"):
                     last_positional_at = total_moves
 
+                record_move(game_id, total_moves, move.uci(), eval_before, eval_after,
+                            trigger, True, is_capture, board.is_check())
+
                 if trigger:
                     quip = get_quip(personality, trigger)
                     if quip:
@@ -372,6 +382,7 @@ async def play_game(
                     quip = get_quip(personality, trigger)
                     if quip:
                         yield {"type": "quip", "text": quip, "personality": personality, "capture": False}
+                    record_game_end(game_id, board.result(), total_moves)
                     yield {
                         "type": "done",
                         "status": "mate",

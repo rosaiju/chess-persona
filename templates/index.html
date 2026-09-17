@@ -255,6 +255,84 @@
     .tts-toggle:hover { border-color: #444; color: #aaa; }
     .tts-toggle.muted { background: #1a0a0a; border-color: #4a1a1a; color: #f87171; }
 
+    /* ── Insights panel ── */
+    .insights-section {
+      display: none; flex-direction: column; gap: 0;
+      background: #0d0d0d; border: 1px solid #1e1e1e; border-radius: 10px;
+      overflow: hidden;
+    }
+    .insights-section.visible { display: flex; }
+
+    .ins-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 11px 16px; border-bottom: 1px solid #161616;
+    }
+    .ins-title { font-size: 0.72rem; font-weight: 700; color: #666; text-transform: uppercase; letter-spacing: 0.6px; }
+    .ins-loading { color: #383838; font-size: 0.75rem; font-style: italic; }
+
+    .ins-body { padding: 16px; display: flex; flex-direction: column; gap: 18px; }
+
+    /* Summary strip */
+    .ins-summary { display: flex; align-items: flex-end; gap: 0; }
+    .ins-summary-left { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+    .ins-record { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; }
+    .ins-record .r-games { font-weight: 700; color: #ccc; }
+    .ins-record .r-games-lbl { color: #3a3a3a; font-size: 0.75rem; }
+    .ins-record .r-sep { color: #222; }
+    .ins-record .r-w { color: #4ade80; font-weight: 600; }
+    .ins-record .r-l { color: #f87171; font-weight: 600; }
+    .ins-record .r-d { color: #fbbf24; font-weight: 600; }
+    .ins-winrate { text-align: right; }
+    .ins-winrate .wr-num { font-size: 2rem; font-weight: 800; color: #e8e8e8; line-height: 1; }
+    .ins-winrate .wr-lbl { font-size: 0.65rem; color: #444; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
+
+    /* Metrics */
+    .ins-metrics { display: flex; gap: 8px; }
+    .ins-metric {
+      flex: 1; background: #111; border-radius: 7px;
+      padding: 10px 12px; border-top: 2px solid transparent;
+    }
+    .ins-metric.m-bad  { border-top-color: #f87171; }
+    .ins-metric.m-warn { border-top-color: #fbbf24; }
+    .ins-metric.m-good { border-top-color: #4ade80; }
+    .ins-metric .m-val { font-size: 1.45rem; font-weight: 700; color: #e8e8e8; line-height: 1; }
+    .ins-metric .m-lbl { font-size: 0.62rem; color: #4a4a4a; margin-top: 5px; text-transform: uppercase; letter-spacing: 0.3px; }
+
+    /* Phase bars */
+    .ins-slabel { font-size: 0.65rem; color: #383838; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 9px; }
+    .ins-phases { display: flex; flex-direction: column; gap: 8px; }
+    .ins-phase-row { display: flex; align-items: center; gap: 10px; }
+    .ins-phase-row .ph-name {
+      font-size: 0.7rem; color: #555; text-transform: uppercase;
+      letter-spacing: 0.3px; width: 78px; flex-shrink: 0;
+    }
+    .ins-phase-row.is-worst .ph-name { color: #f87171; font-weight: 600; }
+    .ph-bar-track { flex: 1; background: #181818; border-radius: 3px; height: 5px; overflow: hidden; }
+    .ph-bar-fill  { height: 100%; border-radius: 3px; background: #2a2a2a; transition: width 0.5s ease; }
+    .ph-bar-fill.pf-worst { background: #f87171; }
+    .ph-bar-fill.pf-mid   { background: #fbbf24; }
+    .ins-phase-row .ph-stat {
+      font-size: 0.68rem; color: #444; width: 64px; text-align: right; flex-shrink: 0; white-space: nowrap;
+    }
+    .ins-phase-row.is-worst .ph-stat { color: #f87171; }
+
+    /* Recent games */
+    .ins-recent { display: flex; flex-direction: column; gap: 2px; }
+    .ins-recent-row {
+      display: grid; grid-template-columns: 76px 24px 1fr auto;
+      align-items: center; gap: 10px;
+      padding: 7px 10px; background: #111; border-radius: 6px;
+      font-size: 0.74rem;
+    }
+    .rr-date { color: #363636; }
+    .rr-res  { font-weight: 700; font-size: 0.78rem; text-align: center; }
+    .rr-res.win  { color: #4ade80; }
+    .rr-res.loss { color: #f87171; }
+    .rr-res.draw { color: #fbbf24; }
+    .rr-stats { color: #4a4a4a; }
+    .rr-link a { color: #2563eb; text-decoration: none; font-size: 0.68rem; opacity: 0.7; }
+    .rr-link a:hover { opacity: 1; text-decoration: underline; }
+
     @media (max-width: 700px) {
       .main { flex-direction: column; }
       .left { flex: none; width: 100%; }
@@ -335,6 +413,15 @@
 
     <div class="chat-area" id="chat-area">
       <div class="chat-empty" id="chat-empty">Quips will appear here once the game starts.</div>
+    </div>
+
+    <!-- ── Insights panel (shown after game ends) ── -->
+    <div class="insights-section" id="insights-section">
+      <div class="ins-header">
+        <span class="ins-title" id="insights-title">Game Analysis</span>
+        <span class="ins-loading" id="insights-loading">Loading…</span>
+      </div>
+      <div id="insights-body"></div>
     </div>
 
   </div>
@@ -834,9 +921,120 @@
         document.getElementById('play-btn').textContent = 'Play Again';
         document.getElementById('opp-input').disabled = false;
         if (lastOpponent) document.getElementById('rematch-btn').style.display = '';
+        loadInsights(lastOpponent || null);
         break;
       }
     }
+  }
+
+  // ── Insights ─────────────────────────────────────────────────────────────────
+
+  async function loadInsights(opponent) {
+    const section = document.getElementById('insights-section');
+    const loading = document.getElementById('insights-loading');
+    const body    = document.getElementById('insights-body');
+    const title   = document.getElementById('insights-title');
+
+    section.classList.add('visible');
+    loading.style.display = '';
+    body.innerHTML = '';
+    title.textContent = opponent ? `Analysis vs. ${opponent}` : 'All-Time Analysis';
+
+    try {
+      const url = opponent ? `/insights/${encodeURIComponent(opponent)}` : '/insights';
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('fetch failed');
+      const d = await res.json();
+      loading.style.display = 'none';
+      body.innerHTML = renderInsights(d);
+    } catch (e) {
+      loading.textContent = 'Could not load insights.';
+    }
+  }
+
+  function renderInsights(d) {
+    if (!d.games_played) {
+      return `<div style="padding:20px 16px;text-align:center;color:#333;font-size:0.82rem">No games recorded yet.</div>`;
+    }
+
+    const winRate = Math.round((d.win_rate || 0) * 100);
+    const bp = d.phase_breakdown || {};
+    const phases = ['opening', 'middlegame', 'endgame'];
+
+    // Phase bars — scale to max combined blunders+mistakes
+    const phaseTotals = phases.map(p => (bp[p]?.blunders || 0) + (bp[p]?.mistakes || 0));
+    const maxTotal = Math.max(...phaseTotals, 1);
+    const worstIdx = phaseTotals.indexOf(Math.max(...phaseTotals));
+
+    const phaseHtml = phases.map((ph, i) => {
+      const p   = bp[ph] || {};
+      const tot = phaseTotals[i];
+      const pct = Math.round((tot / maxTotal) * 100);
+      const isWorst = i === worstIdx && tot > 0;
+      const fillClass = isWorst ? 'pf-worst' : pct >= 60 ? 'pf-mid' : '';
+      const stat = tot > 0 ? `${p.blunders || 0}B · ${p.mistakes || 0}M` : '—';
+      return `<div class="ins-phase-row ${isWorst ? 'is-worst' : ''}">
+        <span class="ph-name">${ph}</span>
+        <div class="ph-bar-track"><div class="ph-bar-fill ${fillClass}" style="width:${pct}%"></div></div>
+        <span class="ph-stat">${stat}</span>
+      </div>`;
+    }).join('');
+
+    // Recent games
+    const recentHtml = (d.recent_games || []).slice(0, 4).map(g => {
+      const date     = g.played_at ? g.played_at.slice(0, 10) : '—';
+      const resLabel = g.result === 'win' ? 'W' : g.result === 'loss' ? 'L' : 'D';
+      const resClass = g.result || 'draw';
+      const stats    = `${g.blunders}B · ${g.mistakes}M`;
+      return `<div class="ins-recent-row">
+        <span class="rr-date">${date}</span>
+        <span class="rr-res ${resClass}">${resLabel}</span>
+        <span class="rr-stats">${stats}</span>
+        <span class="rr-link"><a href="${g.url}" target="_blank" rel="noreferrer">Lichess ↗</a></span>
+      </div>`;
+    }).join('') || `<div style="padding:8px 10px;background:#111;border-radius:6px;font-size:0.75rem;color:#333">No completed games yet.</div>`;
+
+    const bpg = (d.per_game?.blunders   ?? 0).toFixed(1);
+    const mpg = (d.per_game?.mistakes   ?? 0).toFixed(1);
+    const gpg = (d.per_game?.good_moves ?? 0).toFixed(1);
+
+    return `<div class="ins-body">
+      <div class="ins-summary">
+        <div class="ins-summary-left">
+          <div class="ins-record">
+            <span class="r-games">${d.games_played}</span>
+            <span class="r-games-lbl">game${d.games_played !== 1 ? 's' : ''}</span>
+            <span class="r-sep">·</span>
+            <span class="r-w">${d.wins}W</span>
+            <span class="r-l">${d.losses}L</span>
+            <span class="r-d">${d.draws}D</span>
+          </div>
+        </div>
+        <div class="ins-winrate">
+          <div class="wr-num">${winRate}%</div>
+          <div class="wr-lbl">win rate</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="ins-slabel">Per game</div>
+        <div class="ins-metrics">
+          <div class="ins-metric m-bad" ><div class="m-val">${bpg}</div><div class="m-lbl">Blunders</div></div>
+          <div class="ins-metric m-warn"><div class="m-val">${mpg}</div><div class="m-lbl">Mistakes</div></div>
+          <div class="ins-metric m-good"><div class="m-val">${gpg}</div><div class="m-lbl">Good moves</div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="ins-slabel">Mistakes by phase <span style="color:#252525;font-size:0.6rem;margin-left:4px">B = blunders &nbsp; M = mistakes</span></div>
+        <div class="ins-phases">${phaseHtml}</div>
+      </div>
+
+      <div>
+        <div class="ins-slabel">Recent games</div>
+        <div class="ins-recent">${recentHtml}</div>
+      </div>
+    </div>`;
   }
 
   // ── Start game ────────────────────────────────────────────────────────────────
@@ -860,6 +1058,7 @@
     document.getElementById('game-link').style.display = 'none';
     document.getElementById('game-info').style.display = 'none';
     document.getElementById('chat-empty').style.display = '';
+    document.getElementById('insights-section').classList.remove('visible');
     document.querySelectorAll('.bubble').forEach(b => b.remove());
     hideStatus();
     chess = null;

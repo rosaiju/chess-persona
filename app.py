@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse, HTMLResponse, Response
 from pydantic import BaseModel
 
 from lichess.player import play_game
+from analytics.db import get_insights
 from lichess.api import (
     make_human_board_move,
     validate_bot_account,
@@ -134,6 +135,16 @@ async def human_move(req: MoveRequest):
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"ok": True}
+
+
+@app.get("/insights")
+async def insights_all():
+    return await asyncio.to_thread(get_insights)
+
+
+@app.get("/insights/{opponent}")
+async def insights_opponent(opponent: str):
+    return await asyncio.to_thread(get_insights, opponent)
 
 
 @app.get("/account")
