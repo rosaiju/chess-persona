@@ -1,16 +1,16 @@
 """
-AI coaching review — calls Claude to interpret Stockfish analysis data.
+AI coaching review — calls Gemini to interpret Stockfish analysis data.
 
 Stockfish is the sole source of truth for evaluations and best moves.
-Claude's job is to explain what the numbers mean in plain coaching language.
-The prompt passes explicit facts; Claude must not invent evaluations or moves
+Gemini's job is to explain what the numbers mean in plain coaching language.
+The prompt passes explicit facts; the model must not invent evaluations or moves
 not present in the data.
 """
 import asyncio
 import logging
 import os
 
-import anthropic
+from google import genai
 import chess
 import chess.pgn
 
@@ -18,8 +18,7 @@ from analytics.db import _conn, save_coaching_review
 
 log = logging.getLogger(__name__)
 
-MODEL = "claude-haiku-4-5-20251001"
-MAX_TOKENS = 1200
+MODEL = "gemini-2.0-flash"
 
 _PROMPT_TEMPLATE = """\
 You are a chess coach writing a post-game review for an amateur player.
@@ -149,18 +148,14 @@ def _generate_sync(game_id: str):
         log.warning("coaching: cannot build prompt for %s — no data", game_id)
         return
 
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        log.error("coaching: ANTHROPIC_API_KEY not set")
+        log.error("coaching: GEMINI_API_KEY not set")
         return
 
-    client = anthropic.Anthropic(api_key=api_key)
-    message = client.messages.create(
-        model=MODEL,
-        max_tokens=MAX_TOKENS,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    review_text = message.content[0].text.strip()
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(model=MODEL, contents=prompt)
+    review_text = response.text.strip()
     save_coaching_review(game_id, review_text)
     log.info("coaching review saved for game %s", game_id)
 
