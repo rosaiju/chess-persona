@@ -11,6 +11,7 @@ import logging
 import os
 
 from google import genai
+from google.genai import types as genai_types
 import chess
 import chess.pgn
 
@@ -18,7 +19,7 @@ from analytics.db import _conn, save_coaching_review
 
 log = logging.getLogger(__name__)
 
-MODEL = "gemini-2.0-flash"
+MODEL = "gemini-3.6-flash"
 
 _PROMPT_TEMPLATE = """\
 You are a chess coach writing a post-game review for an amateur player.
@@ -154,7 +155,13 @@ def _generate_sync(game_id: str):
         return
 
     client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(model=MODEL, contents=prompt)
+    response = client.models.generate_content(
+        model=MODEL,
+        contents=prompt,
+        config=genai_types.GenerateContentConfig(
+            automatic_function_calling=genai_types.AutomaticFunctionCallingConfig(disable=True),
+        ),
+    )
     review_text = response.text.strip()
     save_coaching_review(game_id, review_text)
     log.info("coaching review saved for game %s", game_id)
