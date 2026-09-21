@@ -28,12 +28,11 @@ import time
 
 import chess
 import chess.engine
-from google import genai
-from google.genai import types as genai_types
 
+from analytics import llm
 from analytics.analysis import STOCKFISH_PATH
-from analytics.coaching import MODEL, REQUEST_TIMEOUT_S, _friendly_error
 from analytics.db import _conn
+from analytics.timing import Timer
 
 log = logging.getLogger(__name__)
 
@@ -49,9 +48,9 @@ PV_LENGTH = 6
 
 MAX_QUESTION_CHARS = 300
 
-# Free-tier Gemini returns 503 "high demand" often; those are worth retrying.
-TRANSIENT_RETRIES = 2
-RETRY_BACKOFF_S = 1.5
+# Answers are 2-4 sentences by instruction; this bounds a runaway generation.
+CHAT_MAX_TOKENS = 220
+
 
 
 class ChatError(RuntimeError):
@@ -405,48 +404,12 @@ def _fallback_answer(ctx: dict) -> str:
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
-def _is_transient(e: Exception) -> bool:
-    blob = str(e).lower()
-    return "503" in blob or "unavailable" in blob or "overloaded" in blob
-
-
-def _ask_gemini(prompt: str) -> str:
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ChatError("GEMINI_API_KEY is not set in .env.")
-    client = genai.Client(
-        api_key=api_key,
-        http_options=genai_types.HttpOptions(timeout=REQUEST_TIMEOUT_S * 1000),
-    )
-
-    # The free tier returns 503 "high demand" often enough that a single
-    # attempt fails routinely. These are transient, so retry briefly rather
-    # than surfacing them; anything else fails immediately.
-    last = None
-    for attempt in range(TRANSIENT_RETRIES + 1):
-        try:
-            response = client.models.generate_content(
-                model=MODEL,
-                contents=prompt,
-                config=genai_types.GenerateContentConfig(
-                    automatic_function_calling=genai_types.AutomaticFunctionCallingConfig(
-                        disable=True
-                    ),
-                ),
-            )
-            if not getattr(response, "text", None):
-                raise ChatError("Gemini returned no text.")
-            return response.text.strip()
-        except ChatError:
-            raise
-        except Exception as e:
-            last = e
-            if not _is_transient(e) or attempt == TRANSIENT_RETRIES:
-                raise
-            wait = RETRY_BACKOFF_S * (attempt + 1)
-            log.info("chat: transient Gemini error, retrying in %.1fs", wait)
-            time.sleep(wait)
-    raise last  # unreachable, but keeps the contract explicit
+def _ask_model(prompt: str) -> llm.LLMResult:
+    """
+    Ask the provider chain. Model selection, quota cooldowns and bounded
+    retries all live in analytics/llm.py, shared with the coaching review.
+    """
+    return llm.generate(prompt, max_output_tokens=CHAT_MAX_TOKENS, label="chat")
 
 
 def answer_question_sync(game_id: str, question: str, personality: str | None = None) -> dict:
@@ -461,7 +424,10 @@ def answer_question_sync(game_id: str, question: str, personality: str | None = 
     if len(question) > MAX_QUESTION_CHARS:
         question = question[:MAX_QUESTION_CHARS]
 
-    ctx = build_context(game_id)
+    timer = Timer(f"chat {game_id}", log_on_exit=False)
+    timer.__enter__()
+    with timer.phase("stockfish"):
+        ctx = build_context(game_id)
     persona = personality or ctx["personality"] or "Cocky"
     facts = _format_facts(ctx)
 
@@ -481,31 +447,58 @@ def answer_question_sync(game_id: str, question: str, personality: str | None = 
     )
 
     fell_back = False
+    result = None
     try:
-        answer = _ask_gemini(prompt)
+        with timer.phase("llm"):
+            result = _ask_model(prompt)
+        answer = result.text
         bad = _verify_moves(answer, boards)
         if bad:
             log.warning("chat %s: illegal moves %s — regenerating", game_id, bad)
-            answer = _ask_gemini(
-                prompt
-                + "\n\nYour previous answer referred to "
-                + ", ".join(bad)
-                + ", which is not legal here. Rewrite it using only the moves listed above."
-            )
+            with timer.phase("llm_retry"):
+                result = _ask_model(
+                    prompt
+                    + "\n\nYour previous answer referred to "
+                    + ", ".join(bad)
+                    + ", which is not legal here. Rewrite it using only the moves listed above."
+                )
+            answer = result.text
             bad = _verify_moves(answer, boards)
             if bad:
                 log.error("chat %s: still illegal %s — using engine fallback", game_id, bad)
                 answer = _fallback_answer(ctx)
                 fell_back = True
+    except llm.AllProvidersFailed as e:
+        # Every model is out of quota or unreachable. Rather than show nothing,
+        # answer from Stockfish alone and say plainly no model was involved.
+        log.warning("chat %s: no model available (%s)", game_id, e)
+        timer.__exit__(None, None, None)
+        return {
+            "answer": _fallback_answer(ctx),
+            "personality": persona,
+            "verified": False,
+            "fell_back": True,
+            "source": "stockfish_only",
+            "provider": None,
+            "model": None,
+            "note": str(e),
+            "timing": timer.as_dict(),
+        }
     except ChatError:
         raise
     except Exception as e:
         log.exception("chat %s: generation failed", game_id)
-        raise ChatError(_friendly_error(e)) from e
+        raise ChatError(str(llm.classify(e))) from e
 
+    timer.__exit__(None, None, None)
+    log.info("[timing] %s", timer.summary())
     return {
         "answer": answer,
         "personality": persona,
         "verified": not fell_back,
         "fell_back": fell_back,
+        "source": "stockfish_only" if fell_back else "model",
+        "provider": result.provider if result else None,
+        "model": result.model if result else None,
+        "timing": timer.as_dict(),
     }

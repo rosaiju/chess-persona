@@ -9,6 +9,13 @@ import chess
 import pytest
 
 import analytics.chat as chat
+from analytics.llm import LLMResult
+
+
+def _reply(text: str) -> LLMResult:
+    """A successful provider response, as llm.generate would return it."""
+    return LLMResult(text=text, provider="gemini", model="test-model", latency_s=0.01,
+                     attempts=[{"provider": "gemini", "model": "test-model", "outcome": "ok"}])
 from analytics.chat import (
     ChatError, _fallback_answer, _format_facts, _verify_moves,
     answer_question_sync, build_context,
@@ -137,8 +144,8 @@ def test_facts_never_offer_an_illegal_move():
 
 def test_answer_uses_the_model_reply_when_it_checks_out(monkeypatch):
     _seed("t-ok", SCHOLARS)
-    monkeypatch.setattr(chat, "_ask_gemini",
-                        lambda prompt: "Play Qxf7# and it is over.")
+    monkeypatch.setattr(chat, "_ask_model",
+                        lambda prompt: _reply("Play Qxf7# and it is over."))
     out = answer_question_sync("t-ok", "What should I play?", "Cocky")
     assert out["verified"] is True and out["fell_back"] is False
     assert "Qxf7#" in out["answer"]
@@ -147,7 +154,7 @@ def test_answer_uses_the_model_reply_when_it_checks_out(monkeypatch):
 def test_answer_falls_back_when_the_model_invents_a_move(monkeypatch):
     """An illegal suggestion must never reach the player."""
     _seed("t-bad", SCHOLARS)
-    monkeypatch.setattr(chat, "_ask_gemini", lambda prompt: "Just play Ke5, easy.")
+    monkeypatch.setattr(chat, "_ask_model", lambda prompt: _reply("Just play Ke5, easy."))
     out = answer_question_sync("t-bad", "What should I play?", "Cocky")
     assert out["fell_back"] is True
     assert "Ke5" not in out["answer"]
@@ -160,9 +167,9 @@ def test_one_regeneration_is_allowed_before_falling_back(monkeypatch):
 
     def flaky(prompt):
         calls.append(prompt)
-        return "Play Ke5." if len(calls) == 1 else "Play Qxf7#."
+        return _reply("Play Ke5." if len(calls) == 1 else "Play Qxf7#.")
 
-    monkeypatch.setattr(chat, "_ask_gemini", flaky)
+    monkeypatch.setattr(chat, "_ask_model", flaky)
     out = answer_question_sync("t-retry", "What now?", "Cocky")
     assert len(calls) == 2, "should retry once with corrective feedback"
     assert out["verified"] is True and "Qxf7#" in out["answer"]
@@ -176,7 +183,7 @@ def test_empty_question_is_rejected():
 
 def test_personality_defaults_to_the_one_the_game_was_played_with(monkeypatch):
     _seed("t-persona", SCHOLARS)
-    monkeypatch.setattr(chat, "_ask_gemini", lambda prompt: "Qxf7# wins.")
+    monkeypatch.setattr(chat, "_ask_model", lambda prompt: _reply("Qxf7# wins."))
     out = answer_question_sync("t-persona", "What now?", None)
     assert out["personality"] == "Cocky"
 
@@ -186,8 +193,48 @@ def test_question_is_passed_to_the_model(monkeypatch):
     seen = {}
     def capture(prompt):
         seen["prompt"] = prompt
-        return "Qxf7# wins."
-    monkeypatch.setattr(chat, "_ask_gemini", capture)
+        return _reply("Qxf7# wins.")
+    monkeypatch.setattr(chat, "_ask_model", capture)
     answer_question_sync("t-q", "Why was my last move bad?", "Cocky")
     assert "Why was my last move bad?" in seen["prompt"]
     assert "STRONGEST MOVE" in seen["prompt"], "engine facts missing from the prompt"
+
+
+# ─── Behaviour when every model is unavailable ────────────────────────────────
+
+def test_stockfish_answers_alone_when_no_model_is_available(monkeypatch):
+    """Quota exhaustion must not take the feature offline.
+
+    Stockfish already knows the answer; the model only phrases it. With no
+    model the answer still goes out, labelled honestly.
+    """
+    from analytics import llm
+
+    _seed("t-nomodel", SCHOLARS)
+
+    def dead(*a, **k):
+        raise llm.AllProvidersFailed("Every configured model has used up its quota.")
+
+    monkeypatch.setattr(chat, "_ask_model", dead)
+    out = answer_question_sync("t-nomodel", "What should I play?", "Cocky")
+
+    assert out["source"] == "stockfish_only"
+    assert out["provider"] is None and out["model"] is None
+    assert out["verified"] is False
+    assert "Qxf7#" in out["answer"], "engine facts should still reach the player"
+
+
+def test_successful_answer_reports_the_model_that_answered(monkeypatch):
+    _seed("t-attrib-model", SCHOLARS)
+    monkeypatch.setattr(chat, "_ask_model", lambda p: _reply("Qxf7# ends it."))
+    out = answer_question_sync("t-attrib-model", "What now?", "Cocky")
+    assert out["source"] == "model"
+    assert out["provider"] == "gemini" and out["model"] == "test-model"
+
+
+def test_answer_carries_timing_breakdown(monkeypatch):
+    _seed("t-timing", SCHOLARS)
+    monkeypatch.setattr(chat, "_ask_model", lambda p: _reply("Qxf7# ends it."))
+    out = answer_question_sync("t-timing", "What now?", "Cocky")
+    assert "timing" in out and "stockfish" in out["timing"]["phases"]
+    assert out["timing"]["total_s"] > 0

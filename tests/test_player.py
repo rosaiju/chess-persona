@@ -779,14 +779,16 @@ def test_coaching_failure_is_recorded(monkeypatch):
     from analytics import coaching
     from analytics.db import get_coaching_review, record_game_start
 
+    from analytics import llm
+
     record_game_start("coach-fail", "someone", "Cocky", "white", "casual")
     monkeypatch.setattr(coaching, "_build_prompt", lambda gid: "prompt")
-    monkeypatch.setenv("GEMINI_API_KEY", "key")
 
     def boom(*a, **k):
-        raise RuntimeError("429 RESOURCE_EXHAUSTED quota exceeded")
+        raise llm.AllProvidersFailed(
+            "Every configured model has used up its free daily quota.")
 
-    monkeypatch.setattr(coaching.genai, "Client", boom)
+    monkeypatch.setattr(coaching.llm, "generate", boom)
     asyncio.run(coaching.generate_review("coach-fail"))
 
     state = get_coaching_review("coach-fail")
@@ -800,14 +802,19 @@ def test_missing_api_key_is_reported(monkeypatch):
     from analytics import coaching
     from analytics.db import get_coaching_review, record_game_start
 
+    from analytics import llm
+
     record_game_start("coach-nokey", "someone", "Cocky", "white", "casual")
     monkeypatch.setattr(coaching, "_build_prompt", lambda gid: "prompt")
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr(llm, "LOCAL_LLM_URL", "")
+    llm.reset_cooldowns()
 
     asyncio.run(coaching.generate_review("coach-nokey"))
     state = get_coaching_review("coach-nokey")
     assert state["done"] is False
-    assert "GEMINI_API_KEY" in (state["error"] or "")
+    # With no key and no local provider, nothing in the chain is configured.
+    assert "no language model is configured" in (state["error"] or "").lower()
 
 
 def test_retry_clears_the_recorded_error():
@@ -852,3 +859,88 @@ def test_successful_review_clears_any_previous_error():
     state = get_coaching_review("coach-ok")
     assert state["done"] is True
     assert state["error"] is None, "stale error survived a successful review"
+
+
+# ─── Review caching and deduplication ─────────────────────────────────────────
+
+def test_completed_review_is_cached_and_not_regenerated(monkeypatch):
+    """A finished review is served from SQLite; the model is not called again."""
+    import asyncio
+    from analytics import coaching, llm
+    from analytics.db import record_game_start, get_coaching_review
+
+    record_game_start("cache-1", "someone", "Cocky", "white", "casual")
+    calls = []
+
+    def once(prompt, **kw):
+        calls.append(prompt)
+        return llm.LLMResult(text="## Game Summary\nGood.", provider="gemini",
+                             model="m1", latency_s=0.01,
+                             attempts=[{"provider": "gemini", "model": "m1",
+                                        "outcome": "ok"}])
+
+    monkeypatch.setattr(coaching, "_build_prompt", lambda gid: "prompt")
+    monkeypatch.setattr(coaching.llm, "generate", once)
+
+    asyncio.run(coaching.generate_review("cache-1"))
+    state = get_coaching_review("cache-1")
+    assert state["done"] is True and len(calls) == 1
+    assert state["provider"] == "gemini" and state["model"] == "m1"
+
+    # _generate_sync is the guarded path the route uses; a cached review must
+    # short-circuit before any model call.
+    from analytics.db import _conn
+    with _conn() as c:
+        done = c.execute("select ai_review_done from games where game_id=?",
+                         ("cache-1",)).fetchone()[0]
+    assert done == 1, "review not persisted for reuse"
+
+
+def test_review_records_which_model_produced_it():
+    from analytics.db import record_game_start, save_coaching_review, get_coaching_review
+
+    record_game_start("attrib-1", "someone", "Cocky", "white", "casual")
+    save_coaching_review("attrib-1", "## Game Summary\nFine.",
+                         provider="local", model="llama3.2")
+    state = get_coaching_review("attrib-1")
+    assert state["provider"] == "local" and state["model"] == "llama3.2"
+
+
+def test_review_failure_message_names_the_real_cause(monkeypatch):
+    """Requirement: never claim a fallback ran, or a quota died, if it didn't."""
+    import asyncio
+    from analytics import coaching, llm
+    from analytics.db import record_game_start, get_coaching_review
+
+    record_game_start("cause-1", "someone", "Cocky", "white", "casual")
+    monkeypatch.setattr(coaching, "_build_prompt", lambda gid: "prompt")
+
+    def busy(prompt, **kw):
+        raise llm.AllProvidersFailed("The models are busy right now. Try again in a moment.")
+
+    monkeypatch.setattr(coaching.llm, "generate", busy)
+    asyncio.run(coaching.generate_review("cause-1"))
+
+    err = (get_coaching_review("cause-1")["error"] or "").lower()
+    assert "busy" in err
+    assert "quota" not in err, "a busy model must not be reported as exhausted quota"
+
+
+def test_review_deadline_is_bounded(monkeypatch):
+    """A hung generation resolves into a visible error, not an endless spinner."""
+    import asyncio
+    from analytics import coaching
+    from analytics.db import record_game_start, get_coaching_review
+
+    record_game_start("slow-1", "someone", "Cocky", "white", "casual")
+    monkeypatch.setattr(coaching, "REVIEW_DEADLINE_S", 0.2)
+    monkeypatch.setattr(coaching, "_build_prompt", lambda gid: "prompt")
+
+    def hang(prompt, **kw):
+        time.sleep(5)
+
+    monkeypatch.setattr(coaching.llm, "generate", hang)
+    asyncio.run(coaching.generate_review("slow-1"))
+
+    err = (get_coaching_review("slow-1")["error"] or "").lower()
+    assert "timed out" in err

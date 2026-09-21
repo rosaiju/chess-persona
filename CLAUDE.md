@@ -129,7 +129,7 @@ scoring with the capped engine would make accuracy depend on the difficulty the
 human picked. When difficulty is `max` there is no cap and one engine serves both.
 
 Post-game analysis (`analytics/analysis.py`) re-evaluates every position with
-its own full-strength engine at `ANALYSIS_TIME` (0.2s, ~depth 20) rather than
+its own full-strength engine at an adaptive per-position budget rather than
 reusing the live `cp_white`. Both halves of `cp_loss` must come from the same
 search: differencing two independent searches turns search noise into phantom
 centipawn loss. On a real 50-ply game mean cp_loss was 1991 under the old scheme
@@ -147,6 +147,43 @@ the game over — the endpoint does not touch it.
 
 The UI shows a Resign button from `waiting` onward and hides it on every
 terminal event.
+
+### Language-model access (`analytics/llm.py`)
+
+Everything needing prose goes through `llm.generate()`. Never call a provider
+SDK directly from a feature module.
+
+**The quota problem.** Gemini's free tier caps `generate_content` at **20
+requests per day**, and the quota is **per model** — the 429 names
+`GenerateRequestsPerDayPerProjectPerModel-FreeTier, limit: 20`. Verified: with
+`gemini-3.6-flash` returning 429, `gemini-3.5-flash-lite` answered normally. So
+the chain is several Gemini models, then an optional local one.
+
+Failures are classified, and the distinction matters:
+
+| Kind | Trigger | Policy |
+|---|---|---|
+| `QuotaExhausted` | 429 with a PerDay quotaId | **never retried**; model put on cooldown and skipped |
+| `RateLimited` | 429 PerMinute, or short retryDelay | retried, honouring the server's delay |
+| `ProviderUnavailable` | 503 / overloaded / network | bounded retries with backoff |
+
+A daily quota that claims "retry in 47s" is still a daily quota, so the cooldown
+floor is `DEFAULT_QUOTA_COOLDOWN_S`, not the server hint.
+
+Config (all optional): `GEMINI_MODELS` (comma-separated chain), `LOCAL_LLM_URL`
++ `LOCAL_LLM_MODEL` for any OpenAI-compatible endpoint (Ollama, LM Studio).
+With `LOCAL_LLM_URL` unset the chain is Gemini-only and nothing else changes.
+
+Every result records `provider` and `model`, persisted on the game row, so the
+UI states which model answered and never implies a fallback that did not run.
+`GET /llm/status` shows the chain and current cooldowns.
+
+### Timing (`analytics/timing.py`)
+
+`Timer` records per-phase durations and logs a one-line breakdown. Added because
+"the review takes 2-3 minutes" was not attributable by guesswork — and the
+assumption that the model was to blame was wrong. A 50-ply review logs
+`analysis 14.38s (stockfish 13.96s x50, engine_start 0.36s, db_write 0.01s)`.
 
 ### In-game Q&A (`analytics/chat.py`)
 

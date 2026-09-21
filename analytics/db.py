@@ -111,6 +111,8 @@ def migrate_db():
             ("ai_review_done", "INTEGER DEFAULT 0"),
             ("difficulty",     "TEXT"),   # engine strength level the AI played at
             ("ai_review_error", "TEXT"),  # why the last coaching attempt failed
+            ("ai_review_provider", "TEXT"),  # which provider actually answered
+            ("ai_review_model",    "TEXT"),  # and which model
         ]:
             _add_col(con, "games", col, typ)
 
@@ -300,24 +302,35 @@ def get_insights(opponent: str | None = None) -> dict:
 def get_coaching_review(game_id: str) -> dict:
     with _conn() as con:
         row = con.execute(
-            "SELECT ai_review, ai_review_done, ai_review_error FROM games WHERE game_id = ?",
+            "SELECT ai_review, ai_review_done, ai_review_error, "
+            "ai_review_provider, ai_review_model FROM games WHERE game_id = ?",
             (game_id,),
         ).fetchone()
         if not row:
-            return {"done": False, "review": None, "error": None}
+            return {"done": False, "review": None, "error": None,
+                    "provider": None, "model": None}
         return {
             "done": bool(row["ai_review_done"]),
             "review": row["ai_review"],
             "error": row["ai_review_error"],
+            "provider": row["ai_review_provider"],
+            "model": row["ai_review_model"],
         }
 
 
-def save_coaching_review(game_id: str, review: str):
+def save_coaching_review(game_id: str, review: str,
+                         provider: str | None = None, model: str | None = None):
+    """
+    Store a finished review, along with what produced it.
+
+    The provider and model are recorded so the UI can state truthfully which
+    model answered, and never imply a fallback ran when it did not.
+    """
     with _conn() as con:
         con.execute(
-            "UPDATE games SET ai_review = ?, ai_review_done = 1, ai_review_error = NULL "
-            "WHERE game_id = ?",
-            (review, game_id),
+            "UPDATE games SET ai_review = ?, ai_review_done = 1, ai_review_error = NULL, "
+            "ai_review_provider = ?, ai_review_model = ? WHERE game_id = ?",
+            (review, provider, model, game_id),
         )
 
 

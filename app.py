@@ -33,6 +33,17 @@ from lichess.api import (
 
 app = FastAPI()
 
+# asyncio keeps only a weak reference to a running task, so a bare create_task
+# can be collected mid-flight. Same pattern as lichess/player.py::_spawn.
+_background: set = set()
+
+
+def _spawn(coro):
+    task = asyncio.create_task(coro)
+    _background.add(task)
+    task.add_done_callback(_background.discard)
+    return task
+
 # Resolve templates relative to this file, not the working directory, so the
 # app serves correctly no matter where uvicorn is launched from.
 TEMPLATES = Path(__file__).parent / "templates"
@@ -213,22 +224,28 @@ async def trigger_coaching(game_id: str):
     if existing.get("error"):
         _log.info("[coaching] %s: retrying after previous failure", game_id)
         await asyncio.to_thread(clear_coaching_error, game_id)
-    # Guard against duplicate concurrent tasks.
+    # Deduplicate: one generation per game at a time. This is authoritative,
+    # not just diagnostic — a second click used to start a second request and
+    # burn another slice of the daily quota for the same review.
     from analytics.coaching import _active_reviews as _cr
     if game_id in _cr:
-        _log.info(
-            "[coaching] %s: generation already active (%.1fs) — returning 'started' without a new task",
-            game_id, time.monotonic() - _cr[game_id],
-        )
-        return {"status": "started"}
-    _log.info("[coaching] %s: no active generation found — starting new task", game_id)
-    asyncio.create_task(generate_coaching_review(game_id))
-    return {"status": "started"}
+        _log.info("[coaching] %s: already generating (%.1fs) — not starting another",
+                  game_id, time.monotonic() - _cr[game_id])
+        return {"status": "started", "deduplicated": True}
+
+    _log.info("[coaching] %s: starting background generation", game_id)
+    _spawn(generate_coaching_review(game_id))
+    return {"status": "started", "deduplicated": False}
 
 
 @app.get("/review/{game_id}/coaching")
 async def coaching_status(game_id: str):
-    return await asyncio.to_thread(get_coaching_review, game_id)
+    state = await asyncio.to_thread(get_coaching_review, game_id)
+    # Tell the page whether work is actually in flight, so a spinner can only
+    # be shown while something is really running.
+    from analytics.coaching import _active_reviews as _cr
+    state["generating"] = game_id in _cr
+    return state
 
 
 @app.get("/game/{game_id}")
@@ -259,6 +276,19 @@ async def difficulties():
             {"key": key, "label": cfg["label"], "elo": cfg["elo"], "blurb": cfg["blurb"]}
             for key, cfg in DIFFICULTIES.items()
         ],
+    }
+
+
+@app.get("/llm/status")
+async def llm_status():
+    """What the model chain looks like right now, and what is on cooldown."""
+    from analytics import llm
+    chain = [{"provider": p.name, "model": p.model, "configured": p.available()}
+             for p in llm.build_chain()]
+    return {
+        "chain": chain,
+        "cooldowns": llm.cooldown_status(),
+        "local_configured": bool(llm.LOCAL_LLM_URL),
     }
 
 

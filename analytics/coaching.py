@@ -11,12 +11,14 @@ import logging
 import os
 import time
 
-from google import genai
-from google.genai import types as genai_types
 import chess
 import chess.pgn
 
-from analytics.db import _conn, save_coaching_review, save_coaching_error
+from analytics import llm
+from analytics.db import (
+    _conn, get_coaching_review, save_coaching_review, save_coaching_error,
+)
+from analytics.timing import Timer
 
 log = logging.getLogger(__name__)
 
@@ -27,11 +29,42 @@ MATE_SCORE_THRESHOLD = 10_000
 
 # Hard ceiling on one Gemini request. The SDK timeout is in milliseconds.
 # Free-tier requests can hang; without this the review page span forever.
+# Kept for chat.py, which imports it. Per-request timeouts now live in llm.py.
 REQUEST_TIMEOUT_S = 90
 
+# Output cap: reviews are ~450 words by instruction, so this bounds a runaway
+# generation without truncating a normal one.
+REVIEW_MAX_TOKENS = 700
+
+# Prompt trimming. The review is capped at ~450 words, so it can only discuss a
+# handful of moves; sending more is tokens spent for nothing. The PGN was
+# dropped entirely — the move list already carries everything the review cites.
+MAX_CRITICAL_LINES = 12
+MAX_STRONG_LINES = 8
+
+# Whole-review deadline. The chain can try several models, so allow for that,
+# but never leave the page waiting indefinitely.
+REVIEW_DEADLINE_S = float(os.getenv("REVIEW_DEADLINE_S", "150"))
+
 # Tracks active generation calls: game_id → wall-clock start time.
-# Used only for diagnostic logging — to detect concurrent duplicate calls.
+# The route consults this to deduplicate, so a second request for the same
+# review does not start a second generation and burn more daily quota.
 _active_reviews: dict[str, float] = {}
+
+# Generation counter per game. asyncio.wait_for abandons the *await*, but the
+# worker thread keeps running and would otherwise overwrite the timeout message
+# with whatever it eventually produced — showing the user a cause that is not
+# the real one. A run only writes if it is still the current generation.
+_generation: dict[str, int] = {}
+
+
+def _claim(game_id: str) -> int:
+    _generation[game_id] = _generation.get(game_id, 0) + 1
+    return _generation[game_id]
+
+
+def _still_current(game_id: str, token: int) -> bool:
+    return _generation.get(game_id) == token
 
 _PROMPT_TEMPLATE = """\
 You are a chess coach writing a post-game review for an amateur player.
@@ -149,6 +182,14 @@ def _build_prompt(game_id: str) -> str | None:
             f"[{detail}]"
         )
 
+    # Only the worst errors are worth the tokens. A 142-ply game produced a
+    # 5.4k-character prompt, most of it a list the review could never cite in
+    # 450 words. Sorted by severity so trimming drops the least important.
+    critical_lines.sort(key=lambda line: -int(
+        line.split("cp loss: ")[1].split(",")[0] if "cp loss: " in line else 10**6
+    ))
+    critical_lines = critical_lines[:MAX_CRITICAL_LINES]
+
     # Strong moves: cp_loss == 0 (matched engine best exactly)
     strong_lines = []
     for m in human_moves:
@@ -179,13 +220,10 @@ Critical errors — DO use these in "Key Mistakes" ({len(critical_lines)} total)
 {chr(10).join(critical_lines) if critical_lines else '  None'}
 
 Strong moves — DO cite these in "What You Did Well" (matched engine best, {len(strong_lines)} total):
-{chr(10).join(strong_lines[:10]) if strong_lines else '  None recorded'}
+{chr(10).join(strong_lines[:MAX_STRONG_LINES]) if strong_lines else '  None recorded'}
 
 Errors by game phase:
 {chr(10).join(phase_lines) if phase_lines else '  No phase data available'}
-
-PGN (for context only — do not derive new evaluations from this):
-{game['pgn'] or '(not available)'}
 """
     return _PROMPT_TEMPLATE.format(game_data=game_data)
 
@@ -204,65 +242,59 @@ def _generate_sync(game_id: str):
     _active_reviews[game_id] = t0
     log.info("[coaching] %s: generation started (active calls: %d)", game_id, len(_active_reviews))
 
+    # Cache check lives here, not only in the route, so the guard holds for
+    # every caller. Regenerating a finished review spends daily quota to
+    # produce something already stored.
+    existing = get_coaching_review(game_id)
+    if existing["done"] and existing["review"]:
+        log.info("[coaching] %s: already generated — serving cached review", game_id)
+        return
+
+    token = _claim(game_id)
+    timer = Timer(f"coaching {game_id}")
     try:
-        prompt = _build_prompt(game_id)
-        if not prompt:
-            log.warning("[coaching] %s: cannot build prompt — no data", game_id)
-            save_coaching_error(game_id, "No analysis data for this game yet.")
-            return
-        log.info("[coaching] %s: prompt built in %.3fs (%d chars)", game_id, time.monotonic() - t0, len(prompt))
+        with timer:
+            with timer.phase("build_prompt"):
+                prompt = _build_prompt(game_id)
+            if not prompt:
+                log.warning("[coaching] %s: cannot build prompt — no data", game_id)
+                save_coaching_error(game_id, "No analysis data for this game yet.")
+                return
+            log.info("[coaching] %s: prompt %d chars (~%d tokens)",
+                     game_id, len(prompt), len(prompt) // 4)
 
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            log.error("[coaching] %s: GEMINI_API_KEY not set", game_id)
-            save_coaching_error(game_id, "GEMINI_API_KEY is not set in .env.")
-            return
+            # The provider chain handles model selection, quota cooldowns and
+            # bounded retries. It raises AllProvidersFailed with a per-attempt
+            # breakdown if nothing answers.
+            with timer.phase("llm"):
+                result = llm.generate(
+                    prompt, max_output_tokens=REVIEW_MAX_TOKENS,
+                    label=f"coaching {game_id}",
+                )
 
-        t_api = time.monotonic()
-        log.info("[coaching] %s: sending request to Gemini (model=%s)", game_id, MODEL)
-
-        # 120-second timeout prevents a hung free-tier request from waiting forever.
-        # The SDK's HttpOptions.timeout is in milliseconds.
-        client = genai.Client(
-            api_key=api_key,
-            http_options=genai_types.HttpOptions(timeout=REQUEST_TIMEOUT_S * 1000),
-        )
-        response = client.models.generate_content(
-            model=MODEL,
-            contents=prompt,
-            config=genai_types.GenerateContentConfig(
-                automatic_function_calling=genai_types.AutomaticFunctionCallingConfig(disable=True),
-            ),
-        )
-        # response.text is None when the model returns no usable candidate —
-        # a safety block or an empty finish. .strip() would raise here and the
-        # page would poll forever, so name it instead.
-        if not getattr(response, "text", None):
-            reason = getattr(response, "prompt_feedback", None)
-            raise RuntimeError(
-                f"Gemini returned no text{f' ({reason})' if reason else ''}."
-            )
-        review_text = response.text.strip()
-        if not review_text:
-            raise RuntimeError("Gemini returned an empty review.")
-        t_api_done = time.monotonic()
-        log.info(
-            "[coaching] %s: Gemini responded in %.2fs (%d chars)",
-            game_id, t_api_done - t_api, len(review_text),
-        )
-
-        t_db = time.monotonic()
-        save_coaching_review(game_id, review_text)
-        log.info(
-            "[coaching] %s: saved to DB in %.3fs — total elapsed %.2fs",
-            game_id, time.monotonic() - t_db, time.monotonic() - t0,
-        )
+            if not _still_current(game_id, token):
+                log.info("[coaching] %s: superseded or timed out — discarding result",
+                         game_id)
+                return
+            with timer.phase("db_write"):
+                save_coaching_review(
+                    game_id, result.text,
+                    provider=result.provider, model=result.model,
+                )
+            log.info("[coaching] %s: %s:%s answered in %.2fs, %d chars",
+                     game_id, result.provider, result.model,
+                     result.latency_s, len(result.text))
     except Exception as e:
         # Every failure has to leave a durable marker. Without one the status
         # endpoint keeps answering {done: false} and the page never stops
         # spinning.
         log.exception("[coaching] %s: generation failed", game_id)
-        save_coaching_error(game_id, _friendly_error(e))
+        if _still_current(game_id, token):
+            msg = str(e) if isinstance(e, llm.LLMError) else _friendly_error(e)
+            save_coaching_error(game_id, msg)
+        else:
+            log.info("[coaching] %s: superseded — not overwriting recorded state",
+                     game_id)
         raise
     finally:
         _active_reviews.pop(game_id, None)
@@ -279,13 +311,17 @@ async def generate_review(game_id: str):
     try:
         await asyncio.wait_for(
             asyncio.to_thread(_generate_sync, game_id),
-            timeout=REQUEST_TIMEOUT_S + 30,
+            timeout=REVIEW_DEADLINE_S,
         )
     except asyncio.TimeoutError:
-        log.error("[coaching] %s: timed out after %ss", game_id, REQUEST_TIMEOUT_S + 30)
+        log.error("[coaching] %s: timed out after %ss", game_id, REVIEW_DEADLINE_S)
+        # Retire the in-flight generation first: the worker thread is still
+        # running and must not overwrite this message when it finishes.
+        _claim(game_id)
+        _active_reviews.pop(game_id, None)
         await asyncio.to_thread(
             save_coaching_error, game_id,
-            f"Timed out after {REQUEST_TIMEOUT_S + 30}s. Gemini did not respond.",
+            f"Timed out after {REVIEW_DEADLINE_S:.0f}s with no response.",
         )
     except Exception:
         # _generate_sync already recorded the specific reason.

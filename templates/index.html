@@ -890,8 +890,14 @@
       addChatBubble(data.answer, data.personality || currentPersonality,
                     { persist: true, cls: 'answer' });
       speak(data.answer);                 // same queue as the quips
-      if (data.fell_back) {
-        setAskEnabled(true, 'Answered straight from the engine (model reply failed checks).');
+      // Say truthfully where the answer came from. Never imply a model
+      // answered when only Stockfish did.
+      if (data.source === 'stockfish_only') {
+        setAskEnabled(true, data.note
+          ? 'Stockfish only — ' + data.note
+          : 'Answered from Stockfish alone; no model was used.');
+      } else if (data.model) {
+        setAskEnabled(true, 'Answered by ' + data.model + '. Ask another question.');
       }
     } catch (e) {
       pending.remove();
