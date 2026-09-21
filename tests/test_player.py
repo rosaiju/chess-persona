@@ -695,3 +695,73 @@ def test_background_tasks_are_referenced():
     import lichess.player as pm
 
     assert hasattr(pm, "_background_tasks") and hasattr(pm, "_spawn")
+
+
+# ─── Evaluation must not depend on the difficulty setting ─────────────────────
+
+def test_capped_engine_is_not_used_for_evaluation():
+    """UCI_LimitStrength distorts analyse(), not just play().
+
+    A quiet position reads about -5cp at full strength but -25 to -35cp when
+    capped, with much wider spread. Those scores drive the quip triggers and are
+    stored as moves.cp_white, so scoring with the capped engine would make every
+    accuracy number depend on the difficulty the human picked. play_game must
+    open a separate full-strength engine for evaluation.
+    """
+    import inspect
+    from lichess.player import play_game
+
+    src = inspect.getsource(play_game)
+    assert "eval_engine" in src, "no separate evaluation engine"
+    assert "_eval_position(eval_engine" in src, "evaluation is using the capped play engine"
+    assert "_eval_position(engine" not in src, "an eval call still uses the capped engine"
+
+
+def test_analysis_does_not_reuse_live_evals():
+    """Both halves of cp_loss must come from the same search.
+
+    analysis.py used to take the 'after' eval from the live game's stored
+    cp_white and compute the 'best' eval with its own engine. Differencing two
+    independent searches turned search noise into phantom centipawn loss --
+    mean cp_loss on a real 50-ply game was 1991 under the old scheme and 35
+    once both halves came from the same engine.
+    """
+    import inspect
+    from analytics import analysis
+
+    src = inspect.getsource(analysis._analyze_game_sync)
+    # Strip comments: the explanation of why we no longer do this mentions it.
+    code = chr(10).join(l.split("#")[0] for l in src.splitlines())
+    assert 'row["cp_white"]' not in code, "analysis is reusing live in-game evals"
+    assert analysis.ANALYSIS_TIME >= 0.15, "post-game analysis budget is too small"
+
+
+# ─── Challenge cancellation ───────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_cancelled_challenge_ends_the_stream_promptly(monkeypatch):
+    """Resigning while waiting cancels the challenge — the stream must notice.
+
+    The acceptance loop used to break only on gameStart and challengeDeclined,
+    so a cancel left it blocked until the 120s timeout and the UI sat on
+    "Waiting to accept".
+    """
+    async def fake_validate(): return {"id": "chesspersonadbot", "title": "BOT"}
+    async def fake_challenge(username, color="black"): return {"challenge": {"id": "game1"}}
+
+    async def fake_stream_events():
+        yield {"type": "challengeCanceled", "challenge": {"id": "game1"}}
+
+    monkeypatch.setattr(player_module, "validate_bot_account", fake_validate)
+    monkeypatch.setattr(player_module, "challenge_user", fake_challenge)
+    monkeypatch.setattr(player_module, "stream_account_events", fake_stream_events)
+    monkeypatch.setattr(player_module, "_open_engine", AsyncMock(return_value=None))
+
+    started = time.monotonic()
+    events = await collect_events(play_game("human", color="white"))
+    elapsed = time.monotonic() - started
+
+    types = [e["type"] for e in events]
+    assert "cancelled" in types, f"expected a cancelled event, got {types}"
+    assert "declined" not in types, "a cancel must not be reported as a decline"
+    assert elapsed < 5, f"stream waited on the timeout instead ({elapsed:.1f}s)"

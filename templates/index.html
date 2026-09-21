@@ -971,6 +971,9 @@
         addLog(`${e.opponent} accepted. Game: ${e.url}`); break;
       case 'declined':
         setStatus(`Challenge declined by ${e.opponent}.`, 'red'); addLog('Challenge declined.'); break;
+      case 'cancelled':
+        setStatus('Challenge cancelled.', 'amber'); addLog('Challenge cancelled by you.');
+        _resetTTS(); break;
       case 'timeout':
         setStatus('Challenge timed out.', 'amber'); addLog('Challenge timed out.'); break;
       case 'thinking':
@@ -1560,10 +1563,20 @@
       }
     } catch (err) {
       setStatus(`Error: ${err.message}`, 'red'); addLog(`Error: ${err.message}`);
-      document.getElementById('play-btn').disabled = false;
-      setDifficultyEnabled(true); showResign(false);
-      document.getElementById('play-btn').textContent = 'Play';
-      document.getElementById('opp-input').disabled = false;
+    } finally {
+      // Covers every way the stream can end. `done` restores the controls
+      // itself (and relabels the button "Play Again"); declined, timeout,
+      // cancelled and error all just end the stream, and without this the
+      // Play button stayed disabled with Resign still showing.
+      const playBtn = document.getElementById('play-btn');
+      if (playBtn.disabled) {
+        playBtn.disabled = false;
+        playBtn.textContent = 'Play';
+        document.getElementById('opp-input').disabled = false;
+        setDifficultyEnabled(true);
+      }
+      showResign(false);
+      currentGameId = null;
     }
   }
 </script>

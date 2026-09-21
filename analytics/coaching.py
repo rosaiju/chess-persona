@@ -22,6 +22,9 @@ log = logging.getLogger(__name__)
 
 MODEL = "gemini-3.6-flash"
 
+# cp_loss at or above this came from a mate score, not a real centipawn count.
+MATE_SCORE_THRESHOLD = 10_000
+
 # Tracks active generation calls: game_id → wall-clock start time.
 # Used only for diagnostic logging — to detect concurrent duplicate calls.
 _active_reviews: dict[str, float] = {}
@@ -92,6 +95,10 @@ def _build_prompt(game_id: str) -> str | None:
         board.push(move)
 
     # Critical errors: cp_loss > 75
+    #
+    # cp_loss is stored raw, so a move that walks into or throws away a forced
+    # mate carries a mate score (~100000). Handing "cp loss: 98166" to the model
+    # invites nonsense, so describe those in words instead of as a number.
     critical_lines = []
     for m in human_moves:
         if m["cp_loss"] is None or m["cp_loss"] <= 75:
@@ -100,11 +107,15 @@ def _build_prompt(game_id: str) -> str | None:
         side = "White" if human_is_white else "Black"
         played = m["san"] or m["uci"]
         best = best_san_by_id.get(m["id"]) or m["best_uci"] or "unknown"
-        category = "Blunder" if m["cp_loss"] > 200 else "Mistake"
+        if m["cp_loss"] >= MATE_SCORE_THRESHOLD:
+            detail = "lost a forced mate or allowed one — decisive"
+        else:
+            category = "Blunder" if m["cp_loss"] > 200 else "Mistake"
+            detail = f"cp loss: {m['cp_loss']}, {category}"
         critical_lines.append(
             f"  Move {move_num} ({side}, {m['phase']}): "
             f"played {played} — better was {best} "
-            f"[cp loss: {m['cp_loss']}, {category}]"
+            f"[{detail}]"
         )
 
     # Strong moves: cp_loss == 0 (matched engine best exactly)

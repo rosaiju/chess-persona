@@ -255,7 +255,17 @@ async def play_game(
 
     ai_side = chess.WHITE if color == "white" else chess.BLACK
     physical_player_side = chess.BLACK if ai_side == chess.WHITE else chess.WHITE
+
+    # Two engines on purpose. `engine` plays, and is capped to the chosen
+    # difficulty. `eval_engine` only scores positions and is always at full
+    # strength: UCI_LimitStrength distorts analyse() as well as play (a quiet
+    # position reads ~-5cp uncapped but ~-30cp at 1600, with much wider
+    # spread), and those scores drive the quip triggers and are stored as
+    # moves.cp_white. Scoring with the capped engine would make the eval
+    # deltas — and every accuracy number derived from them — depend on the
+    # difficulty the human happened to pick.
     engine = await _open_engine(diff_cfg["elo"])
+    eval_engine = engine if diff_cfg["elo"] is None else await _open_engine(None)
 
     try:
         # Challenge the opponent
@@ -275,6 +285,7 @@ async def play_game(
 
         # Wait for acceptance (2 minutes)
         accepted = False
+        cancelled = False
         try:
             async with asyncio.timeout(120):
                 async for event in stream_account_events():
@@ -289,8 +300,21 @@ async def play_game(
                         and event.get("challenge", {}).get("id") == game_id
                     ):
                         break
+                    # Resign during the waiting phase cancels the challenge.
+                    # Without this the stream would sit here until the 120s
+                    # timeout, leaving the UI stuck on "Waiting to accept".
+                    if (
+                        event.get("type") == "challengeCanceled"
+                        and event.get("challenge", {}).get("id") == game_id
+                    ):
+                        cancelled = True
+                        break
         except TimeoutError:
             yield {"type": "timeout"}
+            return
+
+        if cancelled:
+            yield {"type": "cancelled", "opponent": opponent_username}
             return
 
         if not accepted:
@@ -391,7 +415,7 @@ async def play_game(
                 total_moves += 1
                 seen_move_count += 1
 
-                raw = await _eval_position(engine, board)
+                raw = await _eval_position(eval_engine, board)
                 eval_after = raw if ai_side == chess.WHITE else (-raw if raw is not None else None)
                 yield {"type": "fen", "fen": board.fen()}
 
@@ -459,7 +483,7 @@ async def play_game(
                     "gameId": game_id,
                 }
 
-                raw = await _eval_position(engine, board)
+                raw = await _eval_position(eval_engine, board)
                 eval_after = raw if ai_side == chess.WHITE else (-raw if raw is not None else None)
                 yield {"type": "fen", "fen": board.fen(), "move": move.uci()}
 
@@ -509,8 +533,9 @@ async def play_game(
                     break
 
     finally:
-        if engine:
-            try:
-                await asyncio.to_thread(engine.quit)
-            except Exception:
-                pass
+        for _eng in {id(engine): engine, id(eval_engine): eval_engine}.values():
+            if _eng:
+                try:
+                    await asyncio.to_thread(_eng.quit)
+                except Exception:
+                    pass

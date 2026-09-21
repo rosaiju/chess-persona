@@ -119,7 +119,7 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-All 44 tests should pass.
+All 51 tests should pass.
 
 Tests run against a temporary database (`CHESS_DB_PATH`, set in `tests/conftest.py`) and never touch `chess_analytics.db`.
 

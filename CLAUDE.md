@@ -98,6 +98,25 @@ Loaded once per game via `chess.engine.SimpleEngine` in a thread (to avoid block
 
 **Post-game analysis is unaffected** — `analytics/analysis.py` opens its own unrestricted engine, so accuracy and coaching are always measured against full-strength Stockfish regardless of the level played.
 
+### Evaluation vs play strength
+
+`play_game()` opens **two** engines. `engine` plays and is capped to the chosen
+difficulty; `eval_engine` only scores positions and is always full strength.
+`UCI_LimitStrength` distorts `analyse()` as well as `play()` — a quiet position
+reads about -5cp uncapped but -25 to -35cp at 1600, with much wider spread.
+Those scores drive the quip triggers and are stored as `moves.cp_white`, so
+scoring with the capped engine would make accuracy depend on the difficulty the
+human picked. When difficulty is `max` there is no cap and one engine serves both.
+
+Post-game analysis (`analytics/analysis.py`) re-evaluates every position with
+its own full-strength engine at `ANALYSIS_TIME` (0.2s, ~depth 20) rather than
+reusing the live `cp_white`. Both halves of `cp_loss` must come from the same
+search: differencing two independent searches turns search noise into phantom
+centipawn loss. On a real 50-ply game mean cp_loss was 1991 under the old scheme
+and 35 once the evals were consistent. cp_loss is
+`eval(position before, mover's POV) − eval(position after, mover's POV)`, which
+needs two searches per move rather than three.
+
 ### Ending a game early
 
 `POST /game/{game_id}/resign` stops whatever is in flight. Lichess accepts only

@@ -9,9 +9,11 @@ The Lichess v2 formula hits 0% for ACPL > 80, which is designed for
 tournament players. This formula gives meaningful values for casual play.
 
 cp_loss for each move = max(0, best_eval_for_player − actual_eval_for_player)
-  - best_eval_for_player = centipawn score Stockfish would get with best move
-  - actual_eval_for_player = centipawn score after the move actually played
-  Both expressed from the moving player's perspective (positive = player is winning).
+  - best_eval_for_player   = eval of the position BEFORE the move, from the
+                             mover's perspective (i.e. what best play achieves)
+  - actual_eval_for_player = eval of the position AFTER the move, same perspective
+  Both come from the same engine under the same search limit — differencing
+  scores from different searches turns search noise into phantom centipawn loss.
 
 Individual cp_loss values are stored raw in the DB (including mate scores ~100000).
 ACPL computation caps each move at MAX_CP_LOSS_FOR_ACPL so a single
@@ -34,7 +36,10 @@ STOCKFISH_PATH = (
     or r"C:\Users\rohan\AppData\Local\Microsoft\WinGet\Packages\Stockfish.Stockfish_Microsoft.Winget.Source_8wekyb3d8bbwe\stockfish\stockfish-windows-x86-64-universal.exe"
 )
 
-ANALYSIS_TIME = 0.05  # seconds per position
+# Seconds per position. Post-game analysis runs in a background thread with
+# nobody waiting on it, so this is not a latency budget — it buys consistency.
+# Stockfish 19 reaches ~depth 16 at 0.05s and ~depth 20 at 0.2s here.
+ANALYSIS_TIME = 0.2
 
 # Cap per-move cp_loss at this value before computing ACPL.
 # Prevents a single mate-sequence error (cp_loss ~99000) from collapsing the
@@ -106,13 +111,16 @@ def _analyze_game_sync(game_id: str):
             board.push(move)
             fen_after = row["fen_after"] or board.fen()
 
-            # Eval AFTER move — from the perspective of the player who just moved
-            # cp_white is already stored live; use it if available, else analyse
-            if row["cp_white"] is not None:
-                cp_white_after = row["cp_white"]
-            else:
-                info = engine.analyse(board, chess.engine.Limit(time=ANALYSIS_TIME))
-                cp_white_after = info["score"].white().score(mate_score=100_000) or 0
+            # Eval AFTER the move, from the perspective of whoever just moved.
+            #
+            # Deliberately re-analysed rather than reusing row["cp_white"].
+            # That stored value comes from the live game at a different search
+            # budget, and below we compute the best-move eval with THIS engine.
+            # Differencing two scores from different searches turns search noise
+            # into phantom centipawn loss. Both halves of cp_loss must come from
+            # the same engine under the same limit.
+            info = engine.analyse(board, chess.engine.Limit(time=ANALYSIS_TIME))
+            cp_white_after = info["score"].white().score(mate_score=100_000) or 0
 
             # For the player who just moved: positive = they are winning
             if is_player_turn:  # white just moved
@@ -120,20 +128,18 @@ def _analyze_game_sync(game_id: str):
             else:               # black just moved
                 actual_for_mover = -cp_white_after
 
-            # Best move eval: rewind, find best, replay best, eval
+            # Best available eval: the score of the position BEFORE the move,
+            # from the mover's perspective, already is "what best play gets
+            # you". No need to replay the best move and analyse a third
+            # position — that cost an extra search per move and added another
+            # independent search to difference against.
             board.pop()
             best_info = engine.analyse(board, chess.engine.Limit(time=ANALYSIS_TIME))
             best_move_obj = best_info.get("pv", [None])[0]
             best_uci = best_move_obj.uci() if best_move_obj else uci
 
-            if best_move_obj and best_move_obj != move:
-                board.push(best_move_obj)
-                best_info2 = engine.analyse(board, chess.engine.Limit(time=ANALYSIS_TIME))
-                cp_white_best = best_info2["score"].white().score(mate_score=100_000) or 0
-                board.pop()
-                best_for_mover = cp_white_best if is_player_turn else -cp_white_best
-            else:
-                best_for_mover = actual_for_mover
+            cp_white_before = best_info["score"].white().score(mate_score=100_000) or 0
+            best_for_mover = cp_white_before if is_player_turn else -cp_white_before
 
             cp_loss = max(0, best_for_mover - actual_for_mover)
 
