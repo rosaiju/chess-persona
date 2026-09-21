@@ -8,9 +8,9 @@ from chess-persona and speak them through the robot/local speakers.
 Usage:
     python senserobot_client.py [SERVER_URL]
 
-    SERVER_URL defaults to http://localhost:8000
+    SERVER_URL defaults to http://localhost:8001
     Set it to the IP of the machine running chess-persona, e.g.:
-        python senserobot_client.py http://192.168.1.42:8000
+        python senserobot_client.py http://192.168.1.42:8001
 
 The client subscribes to the /events SSE stream and speaks each quip
 using the best available TTS method on the current platform.
