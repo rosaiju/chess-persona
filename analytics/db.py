@@ -1,5 +1,6 @@
 import os
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,10 +14,41 @@ DB_PATH = Path(
 )
 
 
+# Set once per process, on the first connection.
+_pragmas_applied = False
+
+
+@contextmanager
 def _conn():
-    con = sqlite3.connect(DB_PATH, check_same_thread=False)
+    """
+    A connection scoped to the `with` block, committed and then closed.
+
+    sqlite3.Connection's own context manager only wraps the *transaction* — it
+    commits or rolls back but never closes. Every caller here used
+    `with _conn() as con:`, so each call leaked a connection until the garbage
+    collector got to it; on Windows that also kept the file locked. Wrapping
+    `with con` preserves the exact commit/rollback semantics callers already
+    rely on, and the finally closes the handle.
+
+    timeout lets a writer wait for a competing write instead of failing
+    immediately — post-game analysis writes from a worker thread while requests
+    are reading.
+    """
+    global _pragmas_applied
+    con = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=30.0)
     con.row_factory = sqlite3.Row
-    return con
+    try:
+        if not _pragmas_applied:
+            # WAL lets reads proceed during a write, which is the common shape
+            # here (insights read while analysis writes). It is a durable
+            # property of the file, so it only needs setting once.
+            con.execute("PRAGMA journal_mode=WAL")
+            con.execute("PRAGMA synchronous=NORMAL")
+            _pragmas_applied = True
+        with con:
+            yield con
+    finally:
+        con.close()
 
 
 def init_db():

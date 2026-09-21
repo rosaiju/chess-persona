@@ -636,3 +636,62 @@ def test_recorded_game_lands_in_the_test_database():
     row = get_game("isolation-probe")
     assert row is not None and row["difficulty"] == "casual"
     assert "test" in Path(DB_PATH).name.lower()
+
+
+# ─── SQLite connection handling ───────────────────────────────────────────────
+
+def test_conn_closes_its_connection():
+    """_conn must close, not just commit.
+
+    sqlite3.Connection's own context manager is transaction-scoped: it commits
+    or rolls back but leaves the handle open. Every call site uses
+    `with _conn() as con:`, so a non-closing _conn leaked one connection per
+    database operation — and kept the file locked on Windows.
+    """
+    import sqlite3
+    from analytics.db import _conn
+
+    with _conn() as con:
+        con.execute("SELECT 1").fetchone()
+
+    # Using a closed connection raises; that is what we want to see.
+    with pytest.raises(sqlite3.ProgrammingError):
+        con.execute("SELECT 1")
+
+
+def test_conn_does_not_accumulate_connections():
+    import gc
+    import sqlite3
+    from analytics.db import _conn, get_insights
+
+    def alive():
+        gc.collect()
+        return sum(1 for o in gc.get_objects() if isinstance(o, sqlite3.Connection))
+
+    before = alive()
+    for _ in range(25):
+        get_insights()
+    assert alive() <= before + 1, "database connections are accumulating"
+
+
+def test_conn_rolls_back_on_error():
+    """Wrapping `with con` must preserve the original rollback semantics."""
+    from analytics.db import _conn, record_game_start, get_game
+
+    record_game_start("rollback-probe", "someone", "Cocky", "white", "casual")
+    try:
+        with _conn() as con:
+            con.execute("UPDATE games SET opponent = 'changed' WHERE game_id = ?",
+                        ("rollback-probe",))
+            raise ValueError("boom")
+    except ValueError:
+        pass
+
+    assert get_game("rollback-probe")["opponent"] == "someone", "write was not rolled back"
+
+
+def test_background_tasks_are_referenced():
+    """analyze_game is fire-and-forget; asyncio only weak-refs running tasks."""
+    import lichess.player as pm
+
+    assert hasattr(pm, "_background_tasks") and hasattr(pm, "_spawn")

@@ -32,10 +32,7 @@ def _guard_production_db():
         "CHESS_DB_PATH was not applied before analytics.db was imported"
     )
     yield
-    # Best-effort: analytics.db never closes its sqlite connections, so on
-    # Windows the file is still locked at this point. The unlink at import
-    # time clears it on the next run, once this process has exited.
-    try:
-        _TMP_DB.unlink(missing_ok=True)
-    except OSError:
-        pass
+    # analytics.db closes every connection it opens, so nothing holds the file
+    # here. If this ever starts raising on Windows, a connection is leaking
+    # again — that is worth failing on rather than swallowing.
+    _TMP_DB.unlink(missing_ok=True)

@@ -33,6 +33,19 @@ from persona.personality import get_quip
 from analytics.db import record_game_start, record_move, record_game_end
 from analytics.analysis import analyze_game
 
+# asyncio holds only a weak reference to a running task, so a bare
+# create_task() can be garbage-collected before it finishes. Post-game analysis
+# is fire-and-forget, so keep the references until each task completes.
+_background_tasks: set = set()
+
+
+def _spawn(coro):
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
+
 STOCKFISH_PATH = (
     shutil.which("stockfish")
     or r"C:\Users\rohan\AppData\Local\Microsoft\WinGet\Packages\Stockfish.Stockfish_Microsoft.Winget.Source_8wekyb3d8bbwe\stockfish\stockfish-windows-x86-64-universal.exe"
@@ -300,7 +313,9 @@ async def play_game(
             "difficulty_elo": diff_cfg["elo"],
         }
 
-        record_game_start(game_id, opponent_username, personality, color, difficulty_key)
+        await asyncio.to_thread(
+            record_game_start, game_id, opponent_username, personality, color, difficulty_key
+        )
 
         # Game start quip
         quip = get_quip(personality, "game_start")
@@ -347,8 +362,10 @@ async def play_game(
                 quip = get_quip(personality, trigger)
                 if quip:
                     yield {"type": "quip", "text": quip, "personality": personality, "capture": False, "delay_ms": 0}
-                record_game_end(game_id, final_board.result(), len(server_moves))
-                asyncio.create_task(analyze_game(game_id))
+                await asyncio.to_thread(
+                    record_game_end, game_id, final_board.result(), len(server_moves)
+                )
+                _spawn(analyze_game(game_id))
                 yield {
                     "type": "done",
                     "status": status,
@@ -388,9 +405,11 @@ async def play_game(
                 ):
                     last_positional_at = total_moves
 
-                record_move(game_id, total_moves, uci, san, board.fen(),
-                            eval_before, eval_after, raw,
-                            trigger, is_ai_move, is_capture, board.is_check())
+                await asyncio.to_thread(
+                    record_move, game_id, total_moves, uci, san, board.fen(),
+                    eval_before, eval_after, raw,
+                    trigger, is_ai_move, is_capture, board.is_check(),
+                )
 
                 if trigger:
                     quip = get_quip(personality, trigger)
@@ -452,9 +471,11 @@ async def play_game(
                 if trigger and trigger in ("robot_winning", "endgame"):
                     last_positional_at = total_moves
 
-                record_move(game_id, total_moves, move.uci(), san, board.fen(),
-                            eval_before, eval_after, raw,
-                            trigger, True, is_capture, board.is_check())
+                await asyncio.to_thread(
+                    record_move, game_id, total_moves, move.uci(), san, board.fen(),
+                    eval_before, eval_after, raw,
+                    trigger, True, is_capture, board.is_check(),
+                )
 
                 if trigger:
                     quip = get_quip(personality, trigger)
@@ -474,8 +495,10 @@ async def play_game(
                     quip = get_quip(personality, trigger)
                     if quip:
                         yield {"type": "quip", "text": quip, "personality": personality, "capture": False, "delay_ms": 0}
-                    record_game_end(game_id, board.result(), total_moves)
-                    asyncio.create_task(analyze_game(game_id))
+                    await asyncio.to_thread(
+                        record_game_end, game_id, board.result(), total_moves
+                    )
+                    _spawn(analyze_game(game_id))
                     yield {
                         "type": "done",
                         "status": "mate",
