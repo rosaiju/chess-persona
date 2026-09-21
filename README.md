@@ -119,9 +119,27 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-All 56 tests should pass.
+All 73 tests should pass.
 
 Tests run against a temporary database (`CHESS_DB_PATH`, set in `tests/conftest.py`) and never touch `chess_analytics.db`.
+
+---
+
+## Asking the Robot Questions
+
+Once a game has started, an **Ask** box appears under the chat panel. Type a
+question and the same robot you are playing answers it out loud:
+
+- *Why was my last move bad?*
+- *What should I have played instead?*
+- *What is my opponent threatening?*
+- *Can you explain this position?*
+
+Stockfish analyses the live position and Gemini turns that analysis into a
+sentence, in the voice of the personality you picked. Any move the reply names
+is checked for legality first; if the reply fails that check twice, the answer
+falls back to a plain engine summary instead. Answers queue behind personality
+quips, so the two never talk over each other.
 
 ---
 

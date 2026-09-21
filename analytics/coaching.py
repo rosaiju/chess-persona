@@ -78,6 +78,8 @@ def _friendly_error(e: Exception) -> str:
     if "resource_exhausted" in low or "429" in raw or "quota" in low:
         return ("Gemini free-tier quota is exhausted. It resets daily — "
                 "try again later.")
+    if "unavailable" in low or "503" in raw or "overloaded" in low:
+        return "Gemini is busy right now. Try again in a moment."
     if "permission_denied" in low or "403" in raw:
         return "Gemini denied the request. The API key may lack access to this model."
     if "not found" in low and "model" in low:

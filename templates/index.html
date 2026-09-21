@@ -82,6 +82,32 @@
     .p-btn:hover { border-color: #a89880; color: #1c1710; background: #f8f5f0; }
     .p-btn.active { border-color: #1b3a22; color: #f0ebe1; background: #1b3a22; box-shadow: 0 1px 4px rgba(27,58,34,0.3); }
 
+    /* ── Ask panel (conversational AI) ── */
+    .ask-row { display: flex; gap: 6px; margin-top: 8px; }
+    .ask-row input[type="text"] {
+      flex: 1; background: #fff; border: 1.5px solid #d9d0c4; border-radius: 7px;
+      padding: 8px 11px; color: #1c1710; font-size: 0.84rem; outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s; min-width: 0;
+    }
+    .ask-row input[type="text"]:focus {
+      border-color: #1b3a22; box-shadow: 0 0 0 3px rgba(27,58,34,0.12);
+    }
+    .ask-row input[type="text"]:disabled { background: #f3efe9; color: #b0a490; }
+    .ask-btn {
+      background: #1b3a22; color: #f0ebe1; border: none; border-radius: 7px;
+      padding: 8px 14px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+      transition: background 0.15s; flex-shrink: 0;
+    }
+    .ask-btn:hover:not(:disabled) { background: #245030; }
+    .ask-btn:disabled { background: #c8bfb0; cursor: default; }
+    .ask-hint { font-size: 0.68rem; color: #b0a490; margin-top: 5px; }
+    .bubble.you { flex-direction: row-reverse; }
+    .bubble.you .bubble-text {
+      background: #eef3fb; border-left: none; border-right: 3px solid #1a3d6b;
+    }
+    .bubble.thinking .bubble-text { color: #9c8d82; font-style: italic; }
+    .bubble.answer .bubble-text { background: #fffdf8; }
+
     /* ── Difficulty selector ── */
     .diff-row { display: flex; gap: 5px; flex-wrap: wrap; }
     .d-btn {
@@ -573,6 +599,13 @@
       <div class="chat-empty" id="chat-empty">Quips will appear here once the game starts.</div>
     </div>
 
+    <div class="ask-row">
+      <input type="text" id="ask-input" placeholder="Ask about the game…" disabled
+             onkeydown="if(event.key==='Enter') askQuestion()" />
+      <button class="ask-btn" id="ask-btn" onclick="askQuestion()" disabled>Ask</button>
+    </div>
+    <div class="ask-hint" id="ask-hint">Start a game to ask questions.</div>
+
     <!-- ── Insights panel ── -->
     <div class="insights-section" id="insights-section">
       <div class="ins-header">
@@ -630,6 +663,9 @@
   let legalDests = [];
   let isHumanTurn = false;
   let currentGameId = null;
+  // Separate from currentGameId, which the stream's finally clears on game end.
+  // Questions stay answerable about the game just finished.
+  let chatGameId = null;
   let accountInfo = null;
 
   async function loadAccountInfo() {
@@ -786,20 +822,25 @@
   const MAX_BUBBLES = 5;
   const BUBBLE_LIFETIME_MS = 20000;
 
-  function addChatBubble(text, personality) {
+  // opts: { persist } keeps the bubble alive (a question and its answer must
+  // stay readable), { cls } adds a class, { avatar } overrides the icon.
+  // Quips pass no opts and behave exactly as before.
+  function addChatBubble(text, personality, opts = {}) {
     const area = document.getElementById('chat-area');
     document.getElementById('chat-empty').style.display = 'none';
     const bubble = document.createElement('div');
-    bubble.className = 'bubble';
+    bubble.className = 'bubble' + (opts.cls ? ' ' + opts.cls : '');
     bubble.dataset.p = personality;
     bubble.innerHTML = `
-      <div class="bubble-avatar">${PERSONAS[personality]?.avatar || '🤖'}</div>
+      <div class="bubble-avatar">${opts.avatar || PERSONAS[personality]?.avatar || '🤖'}</div>
       <div class="bubble-text">${escapeHtml(text)}</div>
     `;
     area.appendChild(bubble);
     area.scrollTop = area.scrollHeight;
-    const all = area.querySelectorAll('.bubble');
+    // Only transient quips count toward the cap; Q&A is never evicted.
+    const all = area.querySelectorAll('.bubble:not(.persist)');
     if (all.length > MAX_BUBBLES) all[0].remove();
+    if (opts.persist) { bubble.classList.add('persist'); return bubble; }
     setTimeout(() => {
       bubble.classList.add('fading');
       setTimeout(() => {
@@ -808,6 +849,59 @@
           document.getElementById('chat-empty').style.display = '';
       }, 600);
     }, BUBBLE_LIFETIME_MS);
+    return bubble;
+  }
+
+
+  // -- Ask panel: conversational Q&A about the live game -----------------------
+  // Answers go through the same speak() queue as the personality quips, so a
+  // quip and an answer can never talk over each other.
+  let askInFlight = false;
+
+  function setAskEnabled(on, hint) {
+    document.getElementById('ask-input').disabled = !on;
+    document.getElementById('ask-btn').disabled = !on || askInFlight;
+    document.getElementById('ask-hint').textContent =
+      hint || (on ? 'Try: why was my last move bad?' : 'Start a game to ask questions.');
+  }
+
+  async function askQuestion() {
+    const input = document.getElementById('ask-input');
+    const q = input.value.trim();
+    if (!q || askInFlight || !chatGameId) return;
+
+    askInFlight = true;
+    input.value = '';
+    document.getElementById('ask-btn').disabled = true;
+    addChatBubble(q, currentPersonality, { persist: true, cls: 'you', avatar: '\u{1F9D1}' });
+    const pending = addChatBubble('Thinking…', currentPersonality,
+                                  { persist: true, cls: 'thinking' });
+
+    try {
+      const res = await fetch(`/chat/${chatGameId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q, personality: currentPersonality }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || `Server error ${res.status}`);
+
+      pending.remove();
+      addChatBubble(data.answer, data.personality || currentPersonality,
+                    { persist: true, cls: 'answer' });
+      speak(data.answer);                 // same queue as the quips
+      if (data.fell_back) {
+        setAskEnabled(true, 'Answered straight from the engine (model reply failed checks).');
+      }
+    } catch (e) {
+      pending.remove();
+      addChatBubble("Couldn't answer that: " + e.message, currentPersonality,
+                    { persist: true, cls: 'answer' });
+    } finally {
+      askInFlight = false;
+      document.getElementById('ask-btn').disabled = false;
+      input.focus();
+    }
   }
 
   function escapeHtml(str) {
@@ -954,6 +1048,8 @@
       case 'started':
         currentGameId = e.gameId; lastOpponent = e.opponent; aiSide = e.ai_side || 'black';
         showResign(true);
+        chatGameId = e.gameId;
+        setAskEnabled(true);
         chess = new Chess();
         const blackPov = (aiSide === 'white');
         renderBoard(START_FEN, blackPov);
@@ -1527,6 +1623,8 @@
     document.getElementById('opp-input').disabled = true;
     document.getElementById('rematch-btn').style.display = 'none';
     showResign(false);
+    chatGameId = null;
+    setAskEnabled(false);
     document.getElementById('log').innerHTML = '';
     document.getElementById('game-link').style.display = 'none';
     document.getElementById('game-info').style.display = 'none';

@@ -66,6 +66,7 @@ The app is a chess-playing robot with personality. The robot challenges a Liches
 | `quip` | personality line to speak/display (includes `text`, `personality`, `capture`, `delay_ms`) |
 | `done` | game over (includes `status`, `result`, `gameId`, `url`) |
 | `declined` / `timeout` / `error` | challenge not accepted |
+| `cancelled` | challenge withdrawn by the user |
 
 ### TTS
 
@@ -146,6 +147,43 @@ the game over — the endpoint does not touch it.
 
 The UI shows a Resign button from `waiting` onward and hides it on every
 terminal event.
+
+### In-game Q&A (`analytics/chat.py`)
+
+`POST /chat/{game_id}` answers a typed question about a game in progress. Same
+split as the coaching review: Stockfish is the only source of chess truth,
+Gemini only puts it into words.
+
+The live position is **read from the `moves` table**, which `player.py` writes
+after every ply. Nothing here touches the running game loop or the engines it
+owns — chat opens its own short-lived engine per request.
+
+`build_context()` replays the recorded UCI rather than trusting stored FENs, so
+the position analysed is provably reachable by the moves being described. It
+gathers: top `CANDIDATE_MOVES` lines for the side to move, the player's last
+move re-analysed against its best alternative, and a **threat probe**. The probe
+flips the side to move in the FEN (not a null move push — python-chess refuses
+to send null-move history to the engine) so "what is my opponent threatening?"
+can be answered when it is not their turn; the top lines alone cannot answer it.
+
+Guardrails, in order:
+1. The model is handed legal moves with evaluations and told to use only those.
+   It is never asked to find a move.
+2. `_verify_moves()` checks every move token against the positions under
+   discussion (current, pre-last-move, and the threat position). One
+   regeneration with corrective feedback is allowed, then `_fallback_answer()`
+   returns a deterministic answer built straight from engine facts.
+3. Evaluation numbers come from the prompt, never the model.
+
+`_MOVE_TOKEN` deliberately does **not** match bare squares like `e4` or `f7`.
+In prose those are far more often references ("the f7 square", "your knight on
+f6") than move suggestions, and matching them made the verifier reject nearly
+every well-formed answer. The trade-off is that an invented bare pawn push goes
+unverified.
+
+Answers are spoken through the existing `speak()` queue in the browser, so a
+quip and an answer can never overlap. Q&A bubbles carry `persist` and are exempt
+from the quip fade and the `MAX_BUBBLES` cap.
 
 ### Coaching failures
 

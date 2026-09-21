@@ -22,6 +22,7 @@ from analytics.db import (
     get_insights, get_game, get_game_moves, get_coaching_review, clear_coaching_error,
 )
 from analytics.coaching import generate_review as generate_coaching_review
+from analytics.chat import answer_question_sync, ChatError
 from lichess.api import (
     make_human_board_move,
     stop_game,
@@ -166,6 +167,27 @@ async def resign(game_id: str):
         raise HTTPException(status_code=400, detail=str(e))
     _log.info("[resign] %s: %s", game_id, action)
     return {"ok": True, "action": action}
+
+
+class ChatRequest(BaseModel):
+    question: str
+    personality: str | None = None
+
+
+@app.post("/chat/{game_id}")
+async def chat(game_id: str, req: ChatRequest):
+    """
+    Answer a question about a game in progress.
+
+    Stockfish analyses the live position (read from the recorded moves, so the
+    running game loop is untouched) and Gemini puts the result into words.
+    """
+    try:
+        return await asyncio.to_thread(
+            answer_question_sync, game_id, req.question, req.personality
+        )
+    except ChatError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/review/{game_id}", response_class=HTMLResponse)
