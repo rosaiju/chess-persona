@@ -31,6 +31,17 @@ from watchfiles import watch
 
 ROOT = Path(__file__).parent
 
+# Bind all interfaces, not 127.0.0.1.
+#
+# Two things break with a loopback-only bind. Windows resolves "localhost" to
+# IPv6 ::1 before 127.0.0.1, so a browser hitting http://localhost:8001 is
+# refused outright. And the SenseRobot client runs on a different machine, which
+# cannot reach a loopback-only socket at all.
+#
+# This does mean anyone on the local network can reach the dev server, so keep
+# it to a trusted network.
+HOST = "0.0.0.0"
+
 # Directories holding server code. tests/ is excluded so running pytest
 # alongside the server does not bounce it.
 WATCH_DIRS = [ROOT, ROOT / "lichess", ROOT / "analytics", ROOT / "persona"]
@@ -47,7 +58,7 @@ def _is_source_change(_change, path: str) -> bool:
 
 def _spawn(port: int) -> subprocess.Popen:
     cmd = [sys.executable, "-m", "uvicorn", "app:app",
-           "--host", "127.0.0.1", "--port", str(port)]
+           "--host", HOST, "--port", str(port)]
     kwargs = {"cwd": str(ROOT)}
     if os.name == "nt":
         # Own process group, so we can signal the whole tree (uvicorn may have
@@ -81,7 +92,8 @@ def main() -> int:
             print(f"Not a port number: {sys.argv[1]!r}")
             return 2
 
-    print(f"Chess Persona dev server  ->  http://127.0.0.1:{port}")
+    print(f"Chess Persona dev server  ->  http://localhost:{port}")
+    print(f"                              http://127.0.0.1:{port}")
     print("Watching *.py for changes. HTML/JS edits apply on browser refresh.")
     print("Ctrl+C to stop.\n")
 
