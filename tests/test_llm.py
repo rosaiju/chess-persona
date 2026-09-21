@@ -200,3 +200,58 @@ def test_busy_models_report_busy_not_quota(monkeypatch):
     with pytest.raises(llm.AllProvidersFailed) as ei:
         llm.generate("q")
     assert "busy" in str(ei.value).lower()
+
+
+# ─── Thinking models ──────────────────────────────────────────────────────────
+
+def test_empty_response_moves_on_without_retrying(monkeypatch):
+    """A thinking model that spends its budget reasoning returns nothing.
+
+    That is deterministic, so retrying only burns more of its daily 20.
+    """
+    empty = Stub("thinker", raises=llm.EmptyResponse("no text"))
+    good = Stub("lite", text="answer")
+    monkeypatch.setattr(llm, "build_chain", lambda: [empty, good])
+
+    out = llm.generate("q")
+    assert empty.calls == 1, f"empty model retried {empty.calls} times"
+    assert out.model == "lite"
+
+
+def test_empty_response_is_not_reported_as_busy(monkeypatch):
+    monkeypatch.setattr(llm, "build_chain",
+                        lambda: [Stub("m1", raises=llm.EmptyResponse("no text"))])
+    with pytest.raises(llm.AllProvidersFailed) as ei:
+        llm.generate("q")
+    msg = str(ei.value).lower()
+    assert "busy" not in msg and "quota" not in msg
+
+
+def test_thinking_headroom_is_added_to_the_token_cap(monkeypatch):
+    """Without headroom a thinking model hits the cap mid-thought."""
+    seen = {}
+
+    class Recorder(llm.GeminiProvider):
+        def generate(self, prompt, max_output_tokens):
+            seen["cap"] = max_output_tokens + llm.THINKING_HEADROOM_TOKENS
+            return "ok"
+
+    monkeypatch.setattr(llm, "build_chain", lambda: [Recorder("m1")])
+    monkeypatch.setenv("GEMINI_API_KEY", "k")
+    llm.generate("q", max_output_tokens=100)
+    assert seen["cap"] == 100 + llm.THINKING_HEADROOM_TOKENS
+    assert llm.THINKING_HEADROOM_TOKENS >= 150, "measured overhead was 86-109 tokens"
+
+
+def test_default_chain_leads_with_a_fast_model(monkeypatch):
+    monkeypatch.delenv("GEMINI_MODELS", raising=False)
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    chain = llm._model_chain()
+    assert chain[0] == "gemini-3.5-flash-lite"
+    assert len(chain) >= 5, "chain length is the daily-quota headroom"
+    assert "gemini-2.5-flash" not in chain, "that model 404s on this key"
+
+
+def test_chain_is_configurable_by_env(monkeypatch):
+    monkeypatch.setenv("GEMINI_MODELS", "alpha, beta ,gamma")
+    assert llm._model_chain() == ["alpha", "beta", "gamma"]

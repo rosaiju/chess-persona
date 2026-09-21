@@ -49,10 +49,26 @@ def _model_chain() -> list[str]:
     raw = os.getenv("GEMINI_MODELS", "").strip()
     if raw:
         return [m.strip() for m in raw.split(",") if m.strip()]
+    # Ordered fastest-first, because the whole chain is free-tier and the only
+    # thing distinguishing these is latency and daily allowance. Each model
+    # carries its own 20 requests/day, so the chain length is the headroom.
+    #
+    # Measured round-trip on a trivial prompt:
+    #   3.5-flash-lite 0.4s | flash-lite-latest 1.0s | 3.1-flash-lite 5.2s
+    #   flash-latest 2.4s | 3.7-flash 5.2s | 3.5-flash 15.1s
+    #
+    # The last three are "thinking" models: they spend ~90-110 tokens on
+    # internal reasoning before emitting anything, which is why they sit at the
+    # back and why MAX_OUTPUT_TOKENS carries THINKING_HEADROOM_TOKENS.
+    # gemini-2.5-flash is deliberately absent: it 404s on this key.
     return [
-        os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
-        "gemini-3.5-flash-lite",
+        os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
         "gemini-flash-lite-latest",
+        "gemini-3.6-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-flash-latest",
+        "gemini-3.7-flash",
+        "gemini-3.5-flash",
     ]
 
 
@@ -62,6 +78,12 @@ LOCAL_LLM_TIMEOUT_S = float(os.getenv("LOCAL_LLM_TIMEOUT_S", "60"))
 
 REQUEST_TIMEOUT_S = float(os.getenv("LLM_REQUEST_TIMEOUT_S", "45"))
 MAX_OUTPUT_TOKENS = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "400"))
+
+# Thinking models consume output budget on internal reasoning before writing a
+# single visible token — measured at 86-109 tokens on a trivial prompt. Without
+# headroom they hit the cap mid-thought and return an empty response, which
+# looks like a provider failure and silently drops them from the chain.
+THINKING_HEADROOM_TOKENS = 250
 
 TRANSIENT_RETRIES = 2
 RETRY_BACKOFF_S = 1.5
@@ -93,7 +115,17 @@ class RateLimited(LLMError):
 
 
 class ProviderUnavailable(LLMError):
-    """Transient: 503, overloaded, network blip."""
+    """Transient: 503, overloaded, network blip. Worth retrying."""
+
+
+class EmptyResponse(ProviderUnavailable):
+    """
+    Model answered but produced no text.
+
+    Deterministic for a given model and prompt — a thinking model that spent
+    its whole output budget reasoning will do it again. Retrying just burns
+    more of that model's daily allowance, so move to the next one instead.
+    """
 
 
 class AllProvidersFailed(LLMError):
@@ -214,12 +246,17 @@ class GeminiProvider:
             model=self.model,
             contents=prompt,
             config=genai_types.GenerateContentConfig(
-                max_output_tokens=max_output_tokens,
+                max_output_tokens=max_output_tokens + THINKING_HEADROOM_TOKENS,
             ),
         )
         text = getattr(response, "text", None)
         if not text or not text.strip():
-            raise LLMError("Model returned no text.")
+            # Usually a thinking model that spent its whole budget reasoning.
+            # Not fatal: fall through to the next model in the chain.
+            raise EmptyResponse(
+                f"{self.model} returned no text (likely exhausted its output "
+                f"budget on internal reasoning)."
+            )
         return text.strip()
 
 
@@ -339,6 +376,14 @@ def generate(prompt: str, *, max_output_tokens: int = MAX_OUTPUT_TOKENS,
                                      "outcome": "rate_limited"})
                     break
 
+                if isinstance(err, EmptyResponse):
+                    attempts.append({"provider": provider.name, "model": model,
+                                     "outcome": "empty_response",
+                                     "latency_s": round(dt, 2)})
+                    log.warning("[llm] %s %s:%s returned nothing — next model",
+                                label, provider.name, model)
+                    break                       # no retry: it will repeat
+
                 if isinstance(err, ProviderUnavailable):
                     if attempt < TRANSIENT_RETRIES:
                         wait = RETRY_BACKOFF_S * (attempt + 1)
@@ -377,5 +422,8 @@ def _summarise(attempts: list[dict]) -> str:
         return base
     if "unavailable" in outcomes or "rate_limited" in outcomes:
         return "The models are busy right now. Try again in a moment."
+    if outcomes <= {"empty_response", "quota_exhausted", "cooldown", "not_configured"}:
+        return ("No model produced a usable answer. Try again, or raise "
+                "LLM_MAX_OUTPUT_TOKENS if this keeps happening.")
     detail = next((a.get("detail") for a in attempts if a.get("detail")), None)
     return f"Could not generate a response. {detail or ''}".strip()

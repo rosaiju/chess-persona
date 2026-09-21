@@ -170,6 +170,28 @@ Failures are classified, and the distinction matters:
 A daily quota that claims "retry in 47s" is still a daily quota, so the cooldown
 floor is `DEFAULT_QUOTA_COOLDOWN_S`, not the server hint.
 
+**The default chain is seven models = ~140 requests/day**, ordered fastest
+first (measured round-trip on a trivial prompt):
+
+| # | Model | Latency | Note |
+|---|---|---|---|
+| 1 | `gemini-3.5-flash-lite` | 0.4s | |
+| 2 | `gemini-flash-lite-latest` | 1.0s | |
+| 3 | `gemini-3.6-flash` | | former default |
+| 4 | `gemini-3.1-flash-lite` | 5.2s | |
+| 5 | `gemini-flash-latest` | 2.4s | thinking |
+| 6 | `gemini-3.7-flash` | 5.2s | thinking |
+| 7 | `gemini-3.5-flash` | 15.1s | thinking |
+
+`gemini-2.5-flash` is deliberately excluded: it 404s on this key.
+
+**Thinking models** spend 86-109 tokens on internal reasoning before emitting
+anything. With a tight `max_output_tokens` they hit the cap mid-thought and
+return empty, which looks like a provider failure. `THINKING_HEADROOM_TOKENS`
+is added to every request to cover that. An empty response is `EmptyResponse`
+and moves to the next model **without retrying** — it is deterministic for a
+given model and prompt, so a retry would only burn more of that model's 20.
+
 Config (all optional): `GEMINI_MODELS` (comma-separated chain), `LOCAL_LLM_URL`
 + `LOCAL_LLM_MODEL` for any OpenAI-compatible endpoint (Ollama, LM Studio).
 With `LOCAL_LLM_URL` unset the chain is Gemini-only and nothing else changes.
