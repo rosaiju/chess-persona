@@ -7,8 +7,14 @@ import time
 import chess
 import chess.engine
 
-# Seconds to wait after submitting an AI move before speaking the quip.
-# Gives the SenseRobot arm time to physically complete the move.
+# Seconds a consumer should wait after an AI move before speaking its quip —
+# gives the SenseRobot arm time to physically complete the move.
+#
+# This is sent to consumers as `delay_ms` on the quip event; the game loop
+# never sleeps on it. Sleeping here would stop this game from reading the
+# Lichess stream, so the human's next move would sit unnoticed until the
+# delay elapsed. The browser and the SenseRobot client schedule it instead.
+#
 # Override via ROBOT_MOVE_DELAY env var (set to 0 to disable).
 ROBOT_MOVE_DELAY = float(os.getenv("ROBOT_MOVE_DELAY", "7"))
 
@@ -299,7 +305,7 @@ async def play_game(
         # Game start quip
         quip = get_quip(personality, "game_start")
         if quip:
-            yield {"type": "quip", "text": quip, "personality": personality, "capture": False}
+            yield {"type": "quip", "text": quip, "personality": personality, "capture": False, "delay_ms": 0}
 
         board = chess.Board()
         prev_eval: int | None = None
@@ -340,7 +346,7 @@ async def play_game(
                 trigger = _game_over_trigger(final_board, ai_side)
                 quip = get_quip(personality, trigger)
                 if quip:
-                    yield {"type": "quip", "text": quip, "personality": personality, "capture": False}
+                    yield {"type": "quip", "text": quip, "personality": personality, "capture": False, "delay_ms": 0}
                 record_game_end(game_id, final_board.result(), len(server_moves))
                 asyncio.create_task(analyze_game(game_id))
                 yield {
@@ -391,7 +397,7 @@ async def play_game(
                     if quip:
                         _cap = is_ai_move and (is_capture or board.is_check())
                         print(f"[{time.strftime('%H:%M:%S')}][QUIP] trigger={trigger} capture={_cap} text={quip[:40]!r}")
-                        yield {"type": "quip", "text": quip, "personality": personality, "capture": _cap}
+                        yield {"type": "quip", "text": quip, "personality": personality, "capture": _cap, "delay_ms": 0}
 
                 prev_eval = eval_after
 
@@ -422,6 +428,18 @@ async def play_game(
                 total_moves += 1
                 seen_move_count += 1
 
+                # Announce the move as soon as it lands — ahead of the eval, so
+                # the UI isn't waiting on Stockfish. The `fen` event right after
+                # sets whose turn it is, and so always has the last word on
+                # status; the quip that follows only ever adds to the chat.
+                yield {
+                    "type": "move",
+                    "uci": move.uci(),
+                    "fen": board.fen(),
+                    "moveNum": (total_moves + 1) // 2,
+                    "gameId": game_id,
+                }
+
                 raw = await _eval_position(engine, board)
                 eval_after = raw if ai_side == chess.WHITE else (-raw if raw is not None else None)
                 yield {"type": "fen", "fen": board.fen(), "move": move.uci()}
@@ -442,26 +460,20 @@ async def play_game(
                     quip = get_quip(personality, trigger)
                     if quip:
                         _cap = is_capture or board.is_check()
-                        if ROBOT_MOVE_DELAY > 0:
-                            await asyncio.sleep(ROBOT_MOVE_DELAY)
-                        print(f"[{time.strftime('%H:%M:%S')}][QUIP] trigger={trigger} capture={_cap} text={quip[:40]!r}")
-                        yield {"type": "quip", "text": quip, "personality": personality, "capture": _cap}
+                        delay_ms = int(ROBOT_MOVE_DELAY * 1000)
+                        print(f"[{time.strftime('%H:%M:%S')}][QUIP] trigger={trigger} capture={_cap} delay_ms={delay_ms} text={quip[:40]!r}")
+                        yield {
+                            "type": "quip", "text": quip, "personality": personality,
+                            "capture": _cap, "delay_ms": delay_ms,
+                        }
 
                 prev_eval = eval_after
-
-                yield {
-                    "type": "move",
-                    "uci": move.uci(),
-                    "fen": board.fen(),
-                    "moveNum": (total_moves + 1) // 2,
-                    "gameId": game_id,
-                }
 
                 if board.is_game_over():
                     trigger = _game_over_trigger(board, ai_side)
                     quip = get_quip(personality, trigger)
                     if quip:
-                        yield {"type": "quip", "text": quip, "personality": personality, "capture": False}
+                        yield {"type": "quip", "text": quip, "personality": personality, "capture": False, "delay_ms": 0}
                     record_game_end(game_id, board.result(), total_moves)
                     asyncio.create_task(analyze_game(game_id))
                     yield {

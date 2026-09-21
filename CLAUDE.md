@@ -44,7 +44,7 @@ The app is a chess-playing robot with personality. The robot challenges a Liches
 | `thinking` | robot is computing its move |
 | `fen` | board position updated |
 | `move` | robot played a move (includes `uci`, `fen`, `moveNum`, `gameId`) |
-| `quip` | personality line to speak/display (includes `text`, `personality`) |
+| `quip` | personality line to speak/display (includes `text`, `personality`, `capture`, `delay_ms`) |
 | `done` | game over (includes `status`, `result`, `gameId`, `url`) |
 | `declined` / `timeout` / `error` | challenge not accepted |
 
@@ -53,6 +53,24 @@ The app is a chess-playing robot with personality. The robot challenges a Liches
 `GET /tts?text=...&personality=...` — generates MP3 audio via `edge-tts`. The browser fetches this and plays it inline. The SenseRobot client also fetches from this endpoint and plays the audio locally.
 
 Voice-per-personality mapping is in `app.py::VOICE_CONFIG`.
+
+### Quip timing
+
+After the robot moves, its quip should not be spoken until the SenseRobot arm
+has physically finished the move. That wait is **not** performed in the game
+loop — `play_game()` is the only consumer of `stream_game()`, so sleeping there
+would leave the human's next move unread until the delay elapsed.
+
+Instead the quip event carries `delay_ms`, and each consumer schedules it:
+`templates/index.html` via `speak(text, delayMs)`, and `senserobot_client.py`
+when it logs. `ROBOT_MOVE_DELAY` (env var, default 7s) sets the value; quips not
+tied to an AI move carry `delay_ms: 0`. The browser adds its own extra 5s pause
+for capture/check quips in SenseRobot mode on top of `delay_ms`.
+
+Event order after an AI move is `move` → `fen` → `quip`. `move` announces what
+just happened, `fen` sets whose turn it is and so has the last word on the
+status line, and the quip only ever adds a chat bubble. Emitting `move` last
+would let it overwrite the fresher "your turn" status.
 
 ### Dual-audience broadcast
 

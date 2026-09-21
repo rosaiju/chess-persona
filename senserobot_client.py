@@ -148,8 +148,9 @@ def connect_and_listen():
                                         on_robot_move(event)
                                     elif etype == "quip":
                                         # Browser handles all TTS; client only logs
-                                        delay_flag = event.get("capture") is True
-                                        print(f"[{time.strftime('%H:%M:%S')}][QUIP] delay={delay_flag} text={event['text'][:40]!r} (TTS via browser)")
+                                        delay_ms = event.get("delay_ms", 0)
+                                        cap = event.get("capture") is True
+                                        print(f"[{time.strftime('%H:%M:%S')}][QUIP] delay_ms={delay_ms} capture={cap} text={event['text'][:40]!r} (TTS via browser)")
                                     elif etype == "done":
                                         print(f"[GAME] Over — {event.get('result', event.get('status'))}")
                                 except json.JSONDecodeError:

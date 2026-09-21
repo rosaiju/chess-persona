@@ -8,6 +8,7 @@ Covers:
 - _game_over_trigger results
 - capture flag on quip events (for SenseRobot TTS delay)
 """
+import time
 import chess
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -511,3 +512,99 @@ def test_configure_strength_survives_engine_without_elo_support():
     eng = FakeEngine()
     player_module._configure_strength(eng, 1600)   # must not raise
     assert eng.configured is None
+
+
+# ─── Quip delay is scheduled by consumers, not slept in the game loop ─────────
+
+@pytest.mark.asyncio
+async def test_move_event_precedes_quip_for_ai_move(monkeypatch):
+    """The `move` event must be emitted before the quip that follows it.
+
+    `move` describes something that already happened. If it trails a delayed
+    quip, it overwrites the fresher "your turn" status the `fen` event set.
+    """
+    _common_capture_test_patches(monkeypatch)
+
+    async def fake_stream_game(game_id):
+        yield make_gamefull("chesspersonadbot", "human", moves="e2e4 g7g5 d2d4 f7f5")
+
+    async def fake_best_move(engine, board, move_time=0.5):
+        return chess.Move.from_uci("d1h5")   # Qh5+ — guarantees a quip trigger
+
+    monkeypatch.setattr(player_module, "stream_game", fake_stream_game)
+    monkeypatch.setattr(player_module, "_best_move", fake_best_move)
+
+    events = await collect_events(play_game("human", color="white"))
+    types = [e["type"] for e in events]
+
+    assert "move" in types, f"no move event emitted: {types}"
+    move_idx = types.index("move")
+
+    # `fen` must follow `move`: it sets whose turn it is, so it has to have the
+    # last word on status.
+    fens_after = [i for i, t in enumerate(types) if t == "fen" and i > move_idx]
+    assert fens_after, f"expected a fen event after the move event, got: {types}"
+
+    # The quip belonging to this move comes last, so a delayed quip can never
+    # overwrite the fresher "your turn" status.
+    later_quips = [i for i, t in enumerate(types) if t == "quip" and i > move_idx]
+    assert later_quips, f"expected a quip after the move event, got: {types}"
+    assert later_quips[0] > fens_after[0], (
+        f"quip must follow the fen that sets the turn, got: {types}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_ai_move_quip_carries_delay_ms(monkeypatch):
+    """The arm delay travels as `delay_ms` on the quip, not as a server sleep."""
+    _common_capture_test_patches(monkeypatch)
+
+    async def fake_stream_game(game_id):
+        yield make_gamefull("chesspersonadbot", "human", moves="e2e4 g7g5 d2d4 f7f5")
+
+    async def fake_best_move(engine, board, move_time=0.5):
+        return chess.Move.from_uci("d1h5")
+
+    monkeypatch.setattr(player_module, "stream_game", fake_stream_game)
+    monkeypatch.setattr(player_module, "_best_move", fake_best_move)
+    monkeypatch.setattr(player_module, "ROBOT_MOVE_DELAY", 7.0)
+
+    events = await collect_events(play_game("human", color="white"))
+
+    quips = [e for e in events if e["type"] == "quip"]
+    assert quips, "expected at least one quip"
+    # Every quip carries the field; the AI-move one carries the arm delay.
+    assert all("delay_ms" in q for q in quips), f"missing delay_ms: {quips}"
+    assert any(q["delay_ms"] == 7000 for q in quips), (
+        f"expected an AI-move quip with delay_ms=7000, got: "
+        f"{[q['delay_ms'] for q in quips]}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_game_loop_does_not_sleep_for_the_arm_delay(monkeypatch):
+    """A long ROBOT_MOVE_DELAY must not slow the game loop down.
+
+    This is the whole point of the change: the loop has to stay free to read
+    the Lichess stream while the quip is waiting to be spoken.
+    """
+    _common_capture_test_patches(monkeypatch)
+
+    async def fake_stream_game(game_id):
+        yield make_gamefull("chesspersonadbot", "human", moves="e2e4 g7g5 d2d4 f7f5")
+
+    async def fake_best_move(engine, board, move_time=0.5):
+        return chess.Move.from_uci("d1h5")
+
+    monkeypatch.setattr(player_module, "stream_game", fake_stream_game)
+    monkeypatch.setattr(player_module, "_best_move", fake_best_move)
+    monkeypatch.setattr(player_module, "ROBOT_MOVE_DELAY", 30.0)   # absurd on purpose
+
+    started = time.monotonic()
+    events = await collect_events(play_game("human", color="white"))
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 5.0, f"game loop slept for the arm delay ({elapsed:.1f}s)"
+    assert any(e["type"] == "quip" and e.get("delay_ms") == 30000 for e in events), (
+        "the delay should be handed to the consumer, not dropped"
+    )
