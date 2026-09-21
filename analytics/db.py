@@ -110,6 +110,7 @@ def migrate_db():
             ("ai_review",      "TEXT"),
             ("ai_review_done", "INTEGER DEFAULT 0"),
             ("difficulty",     "TEXT"),   # engine strength level the AI played at
+            ("ai_review_error", "TEXT"),  # why the last coaching attempt failed
         ]:
             _add_col(con, "games", col, typ)
 
@@ -299,16 +300,45 @@ def get_insights(opponent: str | None = None) -> dict:
 def get_coaching_review(game_id: str) -> dict:
     with _conn() as con:
         row = con.execute(
-            "SELECT ai_review, ai_review_done FROM games WHERE game_id = ?", (game_id,)
+            "SELECT ai_review, ai_review_done, ai_review_error FROM games WHERE game_id = ?",
+            (game_id,),
         ).fetchone()
         if not row:
-            return {"done": False, "review": None}
-        return {"done": bool(row["ai_review_done"]), "review": row["ai_review"]}
+            return {"done": False, "review": None, "error": None}
+        return {
+            "done": bool(row["ai_review_done"]),
+            "review": row["ai_review"],
+            "error": row["ai_review_error"],
+        }
 
 
 def save_coaching_review(game_id: str, review: str):
     with _conn() as con:
         con.execute(
-            "UPDATE games SET ai_review = ?, ai_review_done = 1 WHERE game_id = ?",
+            "UPDATE games SET ai_review = ?, ai_review_done = 1, ai_review_error = NULL "
+            "WHERE game_id = ?",
             (review, game_id),
+        )
+
+
+def save_coaching_error(game_id: str, message: str):
+    """
+    Record why a coaching attempt failed.
+
+    Without this a failure left ai_review_done at 0 forever, so the status
+    endpoint kept answering {done: false} with HTTP 200 and the review page
+    polled indefinitely with a spinner.
+    """
+    with _conn() as con:
+        con.execute(
+            "UPDATE games SET ai_review_error = ? WHERE game_id = ?",
+            (message[:500], game_id),
+        )
+
+
+def clear_coaching_error(game_id: str):
+    """Called when a retry starts, so the UI stops showing the previous failure."""
+    with _conn() as con:
+        con.execute(
+            "UPDATE games SET ai_review_error = NULL WHERE game_id = ?", (game_id,)
         )

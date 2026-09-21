@@ -705,7 +705,13 @@ function renderCoachingText(text) {
 
 let coachingPollTimer = null;
 
-function renderCoachingCard(game, state) {
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = String(str);
+  return d.innerHTML;
+}
+
+function renderCoachingCard(game, state, detail) {
   const root = document.getElementById('coaching-root');
   if (!root) return;
 
@@ -725,7 +731,8 @@ function renderCoachingCard(game, state) {
     bodyHtml = `<div class="coaching-thinking">Generating coaching review<span class="dot-pulse"></span></div>`;
     btnHtml = `<button class="coaching-generate-btn" disabled>Generating…</button>`;
   } else if (state === 'error') {
-    bodyHtml = `<div class="coaching-error">Failed to generate review. Check that ANTHROPIC_API_KEY is set and try again.</div>`;
+    const msg = detail || 'Failed to generate review.';
+    bodyHtml = `<div class="coaching-error">${escapeHtml(msg)}</div>`;
     btnHtml = `<button class="coaching-generate-btn" id="coachingBtn">Retry</button>`;
   } else if (typeof state === 'string' && state.startsWith('## ')) {
     // state is the review text
@@ -748,19 +755,35 @@ function renderCoachingCard(game, state) {
   if (btn) btn.onclick = () => triggerCoaching(game);
 }
 
-async function pollCoaching(game) {
+// Stop after this many 2s polls (~3 minutes). The server bounds the request
+// itself, so reaching this means something failed without recording a reason.
+const COACHING_MAX_POLLS = 90;
+
+async function pollCoaching(game, attempt = 0) {
   try {
     const resp = await fetch(`/review/${gameId}/coaching`);
     const data = await resp.json();
     if (data.done && data.review) {
       clearTimeout(coachingPollTimer);
       renderCoachingCard(game, data.review);
-    } else {
-      coachingPollTimer = setTimeout(() => pollCoaching(game), 2000);
+      return;
     }
-  } catch {
+    if (data.error) {
+      // The server recorded why it failed — show that rather than spin.
+      clearTimeout(coachingPollTimer);
+      renderCoachingCard(game, 'error', data.error);
+      return;
+    }
+    if (attempt >= COACHING_MAX_POLLS) {
+      clearTimeout(coachingPollTimer);
+      renderCoachingCard(game, 'error',
+        'Timed out waiting for the review. The server stopped responding.');
+      return;
+    }
+    coachingPollTimer = setTimeout(() => pollCoaching(game, attempt + 1), 2000);
+  } catch (e) {
     clearTimeout(coachingPollTimer);
-    renderCoachingCard(game, 'error');
+    renderCoachingCard(game, 'error', `Could not reach the server (${e.message}).`);
   }
 }
 
@@ -786,6 +809,8 @@ function initCoaching(game) {
   }
   if (game.ai_review_done && game.ai_review) {
     renderCoachingCard(game, game.ai_review);
+  } else if (game.ai_review_error) {
+    renderCoachingCard(game, 'error', game.ai_review_error);
   } else {
     renderCoachingCard(game, 'idle');
   }

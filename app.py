@@ -18,7 +18,9 @@ from fastapi.responses import StreamingResponse, HTMLResponse, Response
 from pydantic import BaseModel
 
 from lichess.player import play_game, DIFFICULTIES, DEFAULT_DIFFICULTY
-from analytics.db import get_insights, get_game, get_game_moves, get_coaching_review
+from analytics.db import (
+    get_insights, get_game, get_game_moves, get_coaching_review, clear_coaching_error,
+)
 from analytics.coaching import generate_review as generate_coaching_review
 from lichess.api import (
     make_human_board_move,
@@ -29,6 +31,10 @@ from lichess.api import (
 )
 
 app = FastAPI()
+
+# Resolve templates relative to this file, not the working directory, so the
+# app serves correctly no matter where uvicorn is launched from.
+TEMPLATES = Path(__file__).parent / "templates"
 
 # ── External event broadcast (for SenseRobot client) ─────────────────────────
 _subscribers: Set[Queue] = set()
@@ -47,7 +53,7 @@ def _broadcast(event: dict):
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    content = Path("templates/index.html").read_text(encoding="utf-8")
+    content = (TEMPLATES / "index.html").read_text(encoding="utf-8")
     return HTMLResponse(
         content=content,
         headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
@@ -164,7 +170,7 @@ async def resign(game_id: str):
 
 @app.get("/review/{game_id}", response_class=HTMLResponse)
 async def review(game_id: str):
-    content = Path("templates/review.html").read_text(encoding="utf-8")
+    content = (TEMPLATES / "review.html").read_text(encoding="utf-8")
     return HTMLResponse(content=content, headers={"Cache-Control": "no-store, no-cache"})
 
 
@@ -181,6 +187,10 @@ async def trigger_coaching(game_id: str):
     if existing["done"]:
         _log.info("[coaching] %s: already done — returning cached (%.3fs)", game_id, time.monotonic() - t_req)
         return {"status": "already_done", "review": existing["review"]}
+    # A POST is a retry: drop the previous failure so the page stops showing it.
+    if existing.get("error"):
+        _log.info("[coaching] %s: retrying after previous failure", game_id)
+        await asyncio.to_thread(clear_coaching_error, game_id)
     # Guard against duplicate concurrent tasks.
     from analytics.coaching import _active_reviews as _cr
     if game_id in _cr:

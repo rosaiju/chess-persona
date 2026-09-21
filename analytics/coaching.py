@@ -16,7 +16,7 @@ from google.genai import types as genai_types
 import chess
 import chess.pgn
 
-from analytics.db import _conn, save_coaching_review
+from analytics.db import _conn, save_coaching_review, save_coaching_error
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +24,10 @@ MODEL = "gemini-3.6-flash"
 
 # cp_loss at or above this came from a mate score, not a real centipawn count.
 MATE_SCORE_THRESHOLD = 10_000
+
+# Hard ceiling on one Gemini request. The SDK timeout is in milliseconds.
+# Free-tier requests can hang; without this the review page span forever.
+REQUEST_TIMEOUT_S = 90
 
 # Tracks active generation calls: game_id → wall-clock start time.
 # Used only for diagnostic logging — to detect concurrent duplicate calls.
@@ -59,6 +63,31 @@ Keep each section to 2-4 sentences. Total review under 450 words. Address the pl
 --- ENGINE ANALYSIS DATA ---
 {game_data}
 """
+
+
+def _friendly_error(e: Exception) -> str:
+    """
+    Turn an SDK exception into something a person can act on.
+
+    The raw text is a JSON error blob; the page needs to say what to do next.
+    """
+    raw = str(e)
+    low = raw.lower()
+    if "api_key_invalid" in low or "api key not valid" in low:
+        return "Gemini rejected the API key. Check GEMINI_API_KEY in .env."
+    if "resource_exhausted" in low or "429" in raw or "quota" in low:
+        return ("Gemini free-tier quota is exhausted. It resets daily — "
+                "try again later.")
+    if "permission_denied" in low or "403" in raw:
+        return "Gemini denied the request. The API key may lack access to this model."
+    if "not found" in low and "model" in low:
+        return f"Gemini model '{MODEL}' was not found. It may have been renamed."
+    if "timeout" in low or "timed out" in low or "deadline" in low:
+        return "Gemini did not respond in time. Try again."
+    if isinstance(e, (ConnectionError, OSError)):
+        return "Could not reach Gemini. Check your internet connection."
+    # Unrecognised: keep the real text, trimmed, so nothing is hidden.
+    return f"Review failed — {type(e).__name__}: {raw[:200]}"
 
 
 def _build_prompt(game_id: str) -> str | None:
@@ -177,12 +206,14 @@ def _generate_sync(game_id: str):
         prompt = _build_prompt(game_id)
         if not prompt:
             log.warning("[coaching] %s: cannot build prompt — no data", game_id)
+            save_coaching_error(game_id, "No analysis data for this game yet.")
             return
         log.info("[coaching] %s: prompt built in %.3fs (%d chars)", game_id, time.monotonic() - t0, len(prompt))
 
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             log.error("[coaching] %s: GEMINI_API_KEY not set", game_id)
+            save_coaching_error(game_id, "GEMINI_API_KEY is not set in .env.")
             return
 
         t_api = time.monotonic()
@@ -192,7 +223,7 @@ def _generate_sync(game_id: str):
         # The SDK's HttpOptions.timeout is in milliseconds.
         client = genai.Client(
             api_key=api_key,
-            http_options=genai_types.HttpOptions(timeout=120_000),
+            http_options=genai_types.HttpOptions(timeout=REQUEST_TIMEOUT_S * 1000),
         )
         response = client.models.generate_content(
             model=MODEL,
@@ -201,7 +232,17 @@ def _generate_sync(game_id: str):
                 automatic_function_calling=genai_types.AutomaticFunctionCallingConfig(disable=True),
             ),
         )
+        # response.text is None when the model returns no usable candidate —
+        # a safety block or an empty finish. .strip() would raise here and the
+        # page would poll forever, so name it instead.
+        if not getattr(response, "text", None):
+            reason = getattr(response, "prompt_feedback", None)
+            raise RuntimeError(
+                f"Gemini returned no text{f' ({reason})' if reason else ''}."
+            )
         review_text = response.text.strip()
+        if not review_text:
+            raise RuntimeError("Gemini returned an empty review.")
         t_api_done = time.monotonic()
         log.info(
             "[coaching] %s: Gemini responded in %.2fs (%d chars)",
@@ -214,13 +255,36 @@ def _generate_sync(game_id: str):
             "[coaching] %s: saved to DB in %.3fs — total elapsed %.2fs",
             game_id, time.monotonic() - t_db, time.monotonic() - t0,
         )
+    except Exception as e:
+        # Every failure has to leave a durable marker. Without one the status
+        # endpoint keeps answering {done: false} and the page never stops
+        # spinning.
+        log.exception("[coaching] %s: generation failed", game_id)
+        save_coaching_error(game_id, _friendly_error(e))
+        raise
     finally:
         _active_reviews.pop(game_id, None)
 
 
 async def generate_review(game_id: str):
-    """Async wrapper — runs in a thread so it doesn't block the event loop."""
+    """
+    Async wrapper — runs in a thread so it doesn't block the event loop.
+
+    Bounded by a wall-clock timeout as well as the SDK's own, so a request that
+    hangs below the HTTP layer still resolves into a visible error rather than
+    an endless spinner.
+    """
     try:
-        await asyncio.to_thread(_generate_sync, game_id)
+        await asyncio.wait_for(
+            asyncio.to_thread(_generate_sync, game_id),
+            timeout=REQUEST_TIMEOUT_S + 30,
+        )
+    except asyncio.TimeoutError:
+        log.error("[coaching] %s: timed out after %ss", game_id, REQUEST_TIMEOUT_S + 30)
+        await asyncio.to_thread(
+            save_coaching_error, game_id,
+            f"Timed out after {REQUEST_TIMEOUT_S + 30}s. Gemini did not respond.",
+        )
     except Exception:
+        # _generate_sync already recorded the specific reason.
         log.exception("coaching review failed for %s", game_id)

@@ -5,7 +5,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Running the app
 
 ```bash
-python -m uvicorn app:app --port 8001 --reload
+python dev.py           # port 8001, auto-reload
+python dev.py 8080      # any other port
+```
+
+**Do not use `uvicorn --reload` here.** On this setup uvicorn's reloader logs
+"WatchFiles detected changes ... Reloading" but the worker process never
+actually restarts — verified by watching PIDs across an edit, the worker kept
+its PID and kept serving stale code for 50s+. Edits appear to apply while the
+old code is still running, which is worse than no reload at all.
+
+`dev.py` therefore runs uvicorn as a plain subprocess with no reloader and does
+the watching itself, restarting that subprocess on any `*.py` change (~2s).
+`tests/` is excluded so running pytest does not bounce the server.
+`templates/*.html` are not watched because `app.py` re-reads them per request —
+HTML and JS edits apply on a browser refresh with no restart.
+
+For production, or when reload is not wanted:
+
+```bash
+python -m uvicorn app:app --port 8001
 ```
 
 The app serves everything from a single FastAPI server — no separate frontend build step. The UI is a vanilla HTML/JS file served directly by FastAPI at `GET /`.
@@ -127,6 +146,23 @@ the game over — the endpoint does not touch it.
 
 The UI shows a Resign button from `waiting` onward and hides it on every
 terminal event.
+
+### Coaching failures
+
+Every failure path in `analytics/coaching.py` writes `games.ai_review_error`.
+Previously a failure just left `ai_review_done` at 0, so `GET
+/review/{id}/coaching` kept answering `{done: false}` with HTTP 200 and the page
+polled every 2s forever with a spinner.
+
+`_friendly_error()` maps SDK exceptions to something actionable (invalid key,
+exhausted free-tier quota, permission denied, timeout) rather than surfacing a
+raw JSON error blob. The request is bounded twice: the SDK gets
+`REQUEST_TIMEOUT_S` (90s) and `generate_review` wraps it in an
+`asyncio.wait_for` 30s wider, so a hang below the HTTP layer still resolves into
+a visible error. The page also caps polling at `COACHING_MAX_POLLS` (~3 min).
+
+A `POST` is treated as a retry and clears any recorded error first; a successful
+review clears it too.
 
 ## Testing
 

@@ -765,3 +765,90 @@ async def test_cancelled_challenge_ends_the_stream_promptly(monkeypatch):
     assert "cancelled" in types, f"expected a cancelled event, got {types}"
     assert "declined" not in types, "a cancel must not be reported as a decline"
     assert elapsed < 5, f"stream waited on the timeout instead ({elapsed:.1f}s)"
+
+
+# ─── Coaching failure handling ────────────────────────────────────────────────
+
+def test_coaching_failure_is_recorded(monkeypatch):
+    """A failed review must leave a durable marker.
+
+    Without one, ai_review_done stayed 0, the status endpoint kept answering
+    {done: false} with HTTP 200, and the review page polled forever.
+    """
+    import asyncio
+    from analytics import coaching
+    from analytics.db import get_coaching_review, record_game_start
+
+    record_game_start("coach-fail", "someone", "Cocky", "white", "casual")
+    monkeypatch.setattr(coaching, "_build_prompt", lambda gid: "prompt")
+    monkeypatch.setenv("GEMINI_API_KEY", "key")
+
+    def boom(*a, **k):
+        raise RuntimeError("429 RESOURCE_EXHAUSTED quota exceeded")
+
+    monkeypatch.setattr(coaching.genai, "Client", boom)
+    asyncio.run(coaching.generate_review("coach-fail"))
+
+    state = get_coaching_review("coach-fail")
+    assert state["done"] is False
+    assert state["error"], "failure left no error recorded"
+    assert "quota" in state["error"].lower()
+
+
+def test_missing_api_key_is_reported(monkeypatch):
+    import asyncio
+    from analytics import coaching
+    from analytics.db import get_coaching_review, record_game_start
+
+    record_game_start("coach-nokey", "someone", "Cocky", "white", "casual")
+    monkeypatch.setattr(coaching, "_build_prompt", lambda gid: "prompt")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    asyncio.run(coaching.generate_review("coach-nokey"))
+    state = get_coaching_review("coach-nokey")
+    assert state["done"] is False
+    assert "GEMINI_API_KEY" in (state["error"] or "")
+
+
+def test_retry_clears_the_recorded_error():
+    from analytics.db import (
+        record_game_start, save_coaching_error, clear_coaching_error,
+        get_coaching_review,
+    )
+
+    record_game_start("coach-retry", "someone", "Cocky", "white", "casual")
+    save_coaching_error("coach-retry", "something failed")
+    assert get_coaching_review("coach-retry")["error"] == "something failed"
+
+    clear_coaching_error("coach-retry")
+    assert get_coaching_review("coach-retry")["error"] is None
+
+
+def test_friendly_errors_are_actionable():
+    from analytics.coaching import _friendly_error
+
+    cases = {
+        "400 INVALID_ARGUMENT API key not valid": "api key",
+        "429 RESOURCE_EXHAUSTED quota":           "quota",
+        "403 PERMISSION_DENIED":                  "denied",
+        "deadline exceeded":                      "time",
+    }
+    for raw, expected in cases.items():
+        msg = _friendly_error(RuntimeError(raw))
+        assert expected in msg.lower(), f"{raw!r} -> {msg!r}"
+        assert "{" not in msg, f"raw JSON leaked into: {msg!r}"
+
+
+def test_successful_review_clears_any_previous_error():
+    from analytics.db import (
+        record_game_start, save_coaching_error, save_coaching_review,
+        get_coaching_review,
+    )
+
+    record_game_start("coach-ok", "someone", "Cocky", "white", "casual")
+    save_coaching_error("coach-ok", "previous failure")
+    save_coaching_review("coach-ok", "## Game Summary\nGood game.")
+
+    state = get_coaching_review("coach-ok")
+    assert state["done"] is True
+    assert state["error"] is None, "stale error survived a successful review"
