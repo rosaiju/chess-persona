@@ -81,6 +81,24 @@ Expected response:
 
 ---
 
+## Difficulty
+
+Pick a strength level on the play screen before challenging. The level caps Stockfish via `UCI_Elo`, so the robot is beatable:
+
+| Level | Approx. Elo | Feel |
+|---|---|---|
+| Beginner | 1320 | Hangs pieces. A fair fight for a first game. |
+| **Casual** (default) | 1600 | Solid basics, still misses tactics. |
+| Club | 1900 | Punishes real mistakes. You'll need a plan. |
+| Strong | 2200 | Rarely errs. Expect to be ground down. |
+| Max | unlimited | Unrestricted Stockfish. Good luck. |
+
+The selector is locked while a game is in progress, and your last choice is remembered between sessions. The level played is recorded with each game.
+
+Post-game accuracy and the AI coaching review always run against **full-strength** Stockfish, so your numbers stay comparable across levels.
+
+---
+
 ## SenseRobot Mode vs Browser Mode
 
 | Mode | How moves are submitted |
@@ -101,7 +119,7 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-All 15 tests should pass.
+All 34 tests should pass.
 
 ---
 

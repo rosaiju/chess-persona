@@ -17,7 +17,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse, HTMLResponse, Response
 from pydantic import BaseModel
 
-from lichess.player import play_game
+from lichess.player import play_game, DIFFICULTIES, DEFAULT_DIFFICULTY
 from analytics.db import get_insights, get_game, get_game_moves, get_coaching_review
 from analytics.coaching import generate_review as generate_coaching_review
 from lichess.api import (
@@ -81,6 +81,7 @@ class PlayRequest(BaseModel):
     personality: str = "Cocky"
     color: str = "black"   # color the AI plays as; physical board player plays the opposite
     senserobot_mode: bool = False
+    difficulty: str = DEFAULT_DIFFICULTY
 
 
 class MoveRequest(BaseModel):
@@ -120,6 +121,7 @@ async def play(req: PlayRequest):
             req.personality,
             req.color,
             senserobot_mode=req.senserobot_mode,
+            difficulty=req.difficulty,
         ):
             yield f"data: {json.dumps(event)}\n\n"
             # Broadcast selected events to external subscribers (SenseRobot)
@@ -196,6 +198,18 @@ async def insights_all():
 @app.get("/insights/{opponent}")
 async def insights_opponent(opponent: str):
     return await asyncio.to_thread(get_insights, opponent)
+
+
+@app.get("/difficulties")
+async def difficulties():
+    """Engine strength levels, for the play-screen selector."""
+    return {
+        "default": DEFAULT_DIFFICULTY,
+        "levels": [
+            {"key": key, "label": cfg["label"], "elo": cfg["elo"], "blurb": cfg["blurb"]}
+            for key, cfg in DIFFICULTIES.items()
+        ],
+    }
 
 
 @app.get("/account")

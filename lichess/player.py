@@ -33,20 +33,77 @@ STOCKFISH_PATH = (
 )
 
 
+# ─── Difficulty levels ────────────────────────────────────────
+# Stockfish's UCI_Elo range is 1320–3190. "Max" disables the limiter entirely
+# and lets the engine play at full strength.
+#
+# move_time is the per-move search budget in seconds. It stays low at the weaker
+# levels so the robot answers quickly — at a capped Elo, extra thinking time
+# buys almost nothing.
+
+DIFFICULTIES = {
+    "beginner": {"label": "Beginner", "elo": 1320, "move_time": 0.10,
+                 "blurb": "Hangs pieces. A fair fight for a first game."},
+    "casual":   {"label": "Casual",   "elo": 1600, "move_time": 0.20,
+                 "blurb": "Solid basics, still misses tactics."},
+    "club":     {"label": "Club",     "elo": 1900, "move_time": 0.30,
+                 "blurb": "Punishes real mistakes. You'll need a plan."},
+    "strong":   {"label": "Strong",   "elo": 2200, "move_time": 0.50,
+                 "blurb": "Rarely errs. Expect to be ground down."},
+    "max":      {"label": "Max",      "elo": None, "move_time": 0.50,
+                 "blurb": "Unrestricted Stockfish. Good luck."},
+}
+
+DEFAULT_DIFFICULTY = "casual"
+
+
+def resolve_difficulty(name: str | None) -> tuple[str, dict]:
+    """Normalize a difficulty key, falling back to the default if unknown."""
+    key = (name or "").strip().lower()
+    if key not in DIFFICULTIES:
+        key = DEFAULT_DIFFICULTY
+    return key, DIFFICULTIES[key]
+
+
 # ─── Engine helpers ───────────────────────────────────────────────────────────
 
-def _open_engine_sync():
+def _configure_strength(engine, elo: int | None):
+    """
+    Cap the engine's playing strength via UCI_Elo. `elo=None` leaves the engine
+    at full strength. Clamped to whatever range this Stockfish build reports.
+    Failures are logged and ignored — a wrongly-configured engine still plays.
+    """
+    if elo is None:
+        return
+    try:
+        opt = engine.options.get("UCI_Elo")
+        if opt is None or engine.options.get("UCI_LimitStrength") is None:
+            log.warning("engine has no UCI_Elo support — playing at full strength")
+            return
+        lo = opt.min if opt.min is not None else elo
+        hi = opt.max if opt.max is not None else elo
+        clamped = max(lo, min(hi, elo))
+        engine.configure({"UCI_LimitStrength": True, "UCI_Elo": clamped})
+        if clamped != elo:
+            log.info("UCI_Elo %d clamped to %d (engine range %s–%s)", elo, clamped, lo, hi)
+        print(f"[INFO] Engine strength capped at Elo {clamped}")
+    except Exception as e:
+        log.warning("could not set engine strength: %r", e)
+
+
+def _open_engine_sync(elo: int | None = None):
     try:
         engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH)
         print("[INFO] Stockfish loaded")
-        return engine
     except Exception as e:
         print(f"[WARN] Stockfish not found: {e!r}")
         return None
+    _configure_strength(engine, elo)
+    return engine
 
 
-async def _open_engine():
-    return await asyncio.to_thread(_open_engine_sync)
+async def _open_engine(elo: int | None = None):
+    return await asyncio.to_thread(_open_engine_sync, elo)
 
 
 def _eval_sync(engine, board_fen: str) -> int | None:
@@ -67,21 +124,23 @@ async def _eval_position(engine, board: chess.Board) -> int | None:
     return await asyncio.to_thread(_eval_sync, engine, board.fen())
 
 
-def _best_move_sync(engine, board_fen: str) -> str | None:
+def _best_move_sync(engine, board_fen: str, move_time: float) -> str | None:
     try:
         board = chess.Board(board_fen)
-        result = engine.play(board, chess.engine.Limit(time=0.5))
+        result = engine.play(board, chess.engine.Limit(time=move_time))
         return result.move.uci() if result.move else None
     except Exception:
         return None
 
 
-async def _best_move(engine, board: chess.Board) -> chess.Move | None:
+async def _best_move(
+    engine, board: chess.Board, move_time: float = 0.5
+) -> chess.Move | None:
     if not engine:
         # Fall back to first legal move
         moves = list(board.legal_moves)
         return moves[0] if moves else None
-    uci = await asyncio.to_thread(_best_move_sync, engine, board.fen())
+    uci = await asyncio.to_thread(_best_move_sync, engine, board.fen(), move_time)
     return chess.Move.from_uci(uci) if uci else None
 
 
@@ -153,11 +212,12 @@ async def play_game(
     personality: str = "Cocky",
     color: str = "black",
     senserobot_mode: bool = False,
+    difficulty: str = DEFAULT_DIFFICULTY,
 ):
     """
     Async generator that yields SSE-ready event dicts.
-    AI plays as the requested color (best Stockfish moves) via the Bot API.
-    Quip events are emitted after every move.
+    AI plays as the requested color via the Bot API, at the strength set by
+    `difficulty` (see DIFFICULTIES). Quip events are emitted after every move.
     """
     # Validate bot account before issuing any challenge
     try:
@@ -171,9 +231,12 @@ async def play_game(
         yield {"type": "error", "text": "The bot cannot challenge itself."}
         return
 
+    difficulty_key, diff_cfg = resolve_difficulty(difficulty)
+    move_time = diff_cfg["move_time"]
+
     ai_side = chess.WHITE if color == "white" else chess.BLACK
     physical_player_side = chess.BLACK if ai_side == chess.WHITE else chess.WHITE
-    engine = await _open_engine()
+    engine = await _open_engine(diff_cfg["elo"])
 
     try:
         # Challenge the opponent
@@ -226,9 +289,12 @@ async def play_game(
             "fen": start_fen,
             "ai_side": "white" if ai_side == chess.WHITE else "black",
             "physical_player_side": "black" if ai_side == chess.WHITE else "white",
+            "difficulty": difficulty_key,
+            "difficulty_label": diff_cfg["label"],
+            "difficulty_elo": diff_cfg["elo"],
         }
 
-        record_game_start(game_id, opponent_username, personality, color)
+        record_game_start(game_id, opponent_username, personality, color, difficulty_key)
 
         # Game start quip
         quip = get_quip(personality, "game_start")
@@ -332,7 +398,7 @@ async def play_game(
             # If it's now the AI's turn and game is still going, play best move
             if board.turn == ai_side and not board.is_game_over():
                 yield {"type": "thinking"}
-                move = await _best_move(engine, board)
+                move = await _best_move(engine, board, move_time)
                 print(f"[{time.strftime('%H:%M:%S')}][DEBUG] AI move chosen: {move}")
                 if not move:
                     print(f"[{time.strftime('%H:%M:%S')}][DEBUG] No move found - breaking")

@@ -82,6 +82,23 @@
     .p-btn:hover { border-color: #a89880; color: #1c1710; background: #f8f5f0; }
     .p-btn.active { border-color: #1b3a22; color: #f0ebe1; background: #1b3a22; box-shadow: 0 1px 4px rgba(27,58,34,0.3); }
 
+    /* ── Difficulty selector ── */
+    .diff-row { display: flex; gap: 5px; flex-wrap: wrap; }
+    .d-btn {
+      flex: 1; background: #fff;
+      border: 1.5px solid #d9d0c4; border-radius: 7px; height: 32px;
+      color: #6b5d52; font-size: 0.72rem; font-weight: 600; cursor: pointer;
+      transition: all 0.15s; display: flex; align-items: center; justify-content: center;
+      white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.06); min-width: 0;
+    }
+    .d-btn:hover { border-color: #a89880; color: #1c1710; background: #f8f5f0; }
+    .d-btn.active { border-color: #7a5200; color: #fff; background: #7a5200; box-shadow: 0 1px 4px rgba(122,82,0,0.3); }
+    .diff-blurb {
+      margin-top: 6px; font-size: 0.7rem; color: #9c8d82; line-height: 1.4;
+      min-height: 1.4em;
+    }
+    .diff-blurb .db-elo { color: #7a5200; font-weight: 700; }
+
     /* ── Fields ── */
     .field { display: flex; flex-direction: column; gap: 5px; }
     .field label { font-size: 0.67rem; color: #9c8d82; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; }
@@ -485,6 +502,12 @@
       </div>
 
       <div class="field">
+        <div class="section-label">Difficulty</div>
+        <div class="diff-row" id="diff-row"></div>
+        <div class="diff-blurb" id="diff-blurb"></div>
+      </div>
+
+      <div class="field">
         <label>Opponent Lichess Username</label>
         <input type="text" id="opp-input" placeholder="e.g. rosaiju"
                onkeydown="if(event.key==='Enter') startGame()" />
@@ -517,6 +540,7 @@
     <div id="game-info" style="display:none">
       <div>AI account: <span id="gi-bot">—</span></div>
       <div>Physical player: <span id="gi-human">—</span></div>
+      <div>Difficulty: <span id="gi-diff">—</span></div>
       <div>AI plays: <span id="gi-color">—</span></div>
     </div>
 
@@ -586,6 +610,8 @@
 
   // ── Game state ───────────────────────────────────────────────────────────────
   let currentPersonality = 'Cocky';
+  let currentDifficulty = 'casual';
+  let difficultyLevels = [];
   let ttsMuted = false;
   let gameUrl = '';
   let lastOpponent = '';
@@ -609,6 +635,69 @@
     } catch (e) {}
   }
   loadAccountInfo();
+
+  // ── Difficulty ────────────────────────────────────────────────────
+  // Levels come from GET /difficulties so the server stays the single source
+  // of truth for labels and Elo caps.
+  const DIFF_FALLBACK = {
+    default: 'casual',
+    levels: [
+      { key: 'beginner', label: 'Beginner', elo: 1320, blurb: 'Hangs pieces. A fair fight for a first game.' },
+      { key: 'casual',   label: 'Casual',   elo: 1600, blurb: 'Solid basics, still misses tactics.' },
+      { key: 'club',     label: 'Club',     elo: 1900, blurb: "Punishes real mistakes. You'll need a plan." },
+      { key: 'strong',   label: 'Strong',   elo: 2200, blurb: 'Rarely errs. Expect to be ground down.' },
+      { key: 'max',      label: 'Max',      elo: null, blurb: 'Unrestricted Stockfish. Good luck.' },
+    ],
+  };
+
+  async function loadDifficulties() {
+    let data = DIFF_FALLBACK;
+    try {
+      const res = await fetch('/difficulties');
+      if (res.ok) data = await res.json();
+    } catch (e) {}
+    difficultyLevels = data.levels || [];
+    const saved = (() => { try { return localStorage.getItem('cp-difficulty'); } catch (e) { return null; } })();
+    const valid = difficultyLevels.some(l => l.key === saved);
+    currentDifficulty = valid ? saved : (data.default || 'casual');
+
+    const row = document.getElementById('diff-row');
+    row.innerHTML = '';
+    for (const lvl of difficultyLevels) {
+      const btn = document.createElement('button');
+      btn.className = 'd-btn' + (lvl.key === currentDifficulty ? ' active' : '');
+      btn.dataset.d = lvl.key;
+      btn.textContent = lvl.label;
+      btn.onclick = () => setDifficulty(lvl.key);
+      row.appendChild(btn);
+    }
+    renderDiffBlurb();
+  }
+
+  function renderDiffBlurb() {
+    const lvl = difficultyLevels.find(l => l.key === currentDifficulty);
+    const el = document.getElementById('diff-blurb');
+    if (!lvl) { el.textContent = ''; return; }
+    const elo = lvl.elo ? `<span class="db-elo">~${lvl.elo} Elo</span> · ` : '<span class="db-elo">Full strength</span> · ';
+    el.innerHTML = elo + lvl.blurb;
+  }
+
+  function setDifficulty(key) {
+    currentDifficulty = key;
+    document.querySelectorAll('.d-btn').forEach(b => b.classList.toggle('active', b.dataset.d === key));
+    try { localStorage.setItem('cp-difficulty', key); } catch (e) {}
+    renderDiffBlurb();
+  }
+
+  function setDifficultyEnabled(on) {
+    document.querySelectorAll('.d-btn').forEach(b => {
+      b.disabled = !on;
+      b.style.opacity = on ? '' : '0.45';
+      b.style.cursor = on ? '' : 'not-allowed';
+    });
+  }
+
+  loadDifficulties();
 
   // ── SenseRobot toggle ────────────────────────────────────────────────────────
   function onSenseRobotToggle() {
@@ -860,6 +949,9 @@
         renderBoard(START_FEN, blackPov);
         document.getElementById('gi-color').textContent = aiSide;
         document.getElementById('game-info').style.display = '';
+        document.getElementById('gi-diff').textContent =
+          (e.difficulty_label || currentDifficulty) +
+          (e.difficulty_elo ? ` (~${e.difficulty_elo} Elo)` : '');
         if (isSenseRobotMode) {
           setStatus('SenseRobot mode active. Make your move on the physical board.', 'green');
         } else {
@@ -902,6 +994,7 @@
       case 'error':
         setStatus(`Error: ${e.text}`, 'red'); addLog(`Error: ${e.text}`);
         document.getElementById('play-btn').disabled = false;
+        setDifficultyEnabled(true);
         document.getElementById('play-btn').textContent = 'Play';
         document.getElementById('opp-input').disabled = false; break;
       case 'done': {
@@ -913,6 +1006,7 @@
         addLog(`Game over: ${e.result || e.status}`);
         if (e.url) setGameLink(e.url);
         document.getElementById('play-btn').disabled = false;
+        setDifficultyEnabled(true);
         document.getElementById('play-btn').textContent = 'Play Again';
         document.getElementById('opp-input').disabled = false;
         if (lastOpponent) document.getElementById('rematch-btn').style.display = '';
@@ -1383,6 +1477,7 @@
 
     const senseRobotChecked = document.getElementById('senserobot-mode').checked;
     document.getElementById('play-btn').disabled = true;
+    setDifficultyEnabled(false);
     document.getElementById('play-btn').textContent = 'Connecting…';
     document.getElementById('opp-input').disabled = true;
     document.getElementById('rematch-btn').style.display = 'none';
@@ -1404,7 +1499,7 @@
     try {
       const res = await fetch('/play', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ opponent, personality: currentPersonality, senserobot_mode: senseRobotChecked }),
+        body: JSON.stringify({ opponent, personality: currentPersonality, senserobot_mode: senseRobotChecked, difficulty: currentDifficulty }),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const reader = res.body.getReader();
@@ -1423,6 +1518,7 @@
     } catch (err) {
       setStatus(`Error: ${err.message}`, 'red'); addLog(`Error: ${err.message}`);
       document.getElementById('play-btn').disabled = false;
+      setDifficultyEnabled(true);
       document.getElementById('play-btn').textContent = 'Play';
       document.getElementById('opp-input').disabled = false;
     }

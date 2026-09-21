@@ -28,7 +28,7 @@ The app is a chess-playing robot with personality. The robot challenges a Liches
 
 ### Request flow
 
-1. **`POST /play`** — browser sends `{opponent, personality}` → returns an SSE stream
+1. **`POST /play`** — browser sends `{opponent, personality, difficulty, senserobot_mode}` → returns an SSE stream
 2. `lichess/player.py::play_game()` is the core async generator — it challenges the opponent, waits for acceptance, then loops on `stream_game()` events
 3. After each move (robot's or human's), `_classify_trigger()` picks a quip trigger based on Stockfish eval delta, check, capture, or game phase
 4. `persona/personality.py::get_quip()` returns a random quip for `(personality, trigger)`, avoiding back-to-back repeats
@@ -40,7 +40,7 @@ The app is a chess-playing robot with personality. The robot challenges a Liches
 |---|---|
 | `challenging` | sent challenge to opponent |
 | `waiting` | challenge sent, waiting for accept |
-| `started` | game accepted, play begins |
+| `started` | game accepted, play begins (includes `difficulty`, `difficulty_label`, `difficulty_elo`) |
 | `thinking` | robot is computing its move |
 | `fen` | board position updated |
 | `move` | robot played a move (includes `uci`, `fen`, `moveNum`, `gameId`) |
@@ -61,6 +61,24 @@ Voice-per-personality mapping is in `app.py::VOICE_CONFIG`.
 ### Stockfish
 
 Loaded once per game via `chess.engine.SimpleEngine` in a thread (to avoid blocking the event loop). Path falls back to a hardcoded WinGet install location if `stockfish` isn't on PATH. If Stockfish is unavailable, the robot falls back to the first legal move and skips eval-based quip triggers.
+
+### Difficulty
+
+`lichess/player.py::DIFFICULTIES` defines the playable strength levels. Each entry sets a `UCI_Elo` cap (applied by `_configure_strength()` when the engine opens) and a per-move search budget:
+
+| key | label | UCI_Elo | move_time |
+|---|---|---|---|
+| `beginner` | Beginner | 1320 | 0.10s |
+| `casual` | Casual (default) | 1600 | 0.20s |
+| `club` | Club | 1900 | 0.30s |
+| `strong` | Strong | 2200 | 0.50s |
+| `max` | Max | *unlimited* | 0.50s |
+
+`elo: None` means the strength limiter is left off entirely. Values are clamped to whatever range the installed Stockfish reports for `UCI_Elo` (1320–3190 on Stockfish 19); an engine build with no `UCI_Elo` support logs a warning and plays at full strength rather than failing.
+
+`GET /difficulties` serves this table to the frontend, which renders the selector from it — the server is the single source of truth for labels and Elo caps. The chosen level is stored per-game in `games.difficulty` and echoed back on the `started` event as `difficulty` / `difficulty_label` / `difficulty_elo`. The browser remembers the last pick in `localStorage` under `cp-difficulty`.
+
+**Post-game analysis is unaffected** — `analytics/analysis.py` opens its own unrestricted engine, so accuracy and coaching are always measured against full-strength Stockfish regardless of the level played.
 
 ## Key files
 

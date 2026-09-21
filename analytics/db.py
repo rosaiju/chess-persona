@@ -69,6 +69,7 @@ def migrate_db():
             ("accuracy_ai",    "REAL"),
             ("ai_review",      "TEXT"),
             ("ai_review_done", "INTEGER DEFAULT 0"),
+            ("difficulty",     "TEXT"),   # engine strength level the AI played at
         ]:
             _add_col(con, "games", col, typ)
 
@@ -85,13 +86,19 @@ def _phase(ply: int) -> str:
     return "endgame"
 
 
-def record_game_start(game_id: str, opponent: str, personality: str, ai_color: str):
+def record_game_start(
+    game_id: str,
+    opponent: str,
+    personality: str,
+    ai_color: str,
+    difficulty: str | None = None,
+):
     with _conn() as con:
         con.execute(
             """INSERT OR IGNORE INTO games
-               (game_id, opponent, personality, ai_color, played_at)
-               VALUES (?, ?, ?, ?, ?)""",
-            (game_id, opponent, personality, ai_color,
+               (game_id, opponent, personality, ai_color, difficulty, played_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (game_id, opponent, personality, ai_color, difficulty,
              datetime.now(timezone.utc).isoformat()),
         )
 
@@ -220,6 +227,7 @@ def get_insights(opponent: str | None = None) -> dict:
             "game_id":        gid,
             "opponent":       g["opponent"],
             "result":         g["human_result"],
+            "difficulty":     g["difficulty"],
             "blunders":       sum(1 for m in gm if m["cp_loss"] is not None and m["cp_loss"] > 200),
             "mistakes":       sum(1 for m in gm if m["cp_loss"] is not None and 75 < m["cp_loss"] <= 200),
             "good_moves":     sum(1 for m in gm if m["cp_loss"] is not None and m["cp_loss"] <= 25),

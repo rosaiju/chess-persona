@@ -158,7 +158,7 @@ async def test_physical_move_triggers_one_ai_response(monkeypatch):
 
     make_move_mock = AsyncMock()
 
-    async def fake_best_move(engine, board):
+    async def fake_best_move(engine, board, move_time=0.5):
         return chess.Move.from_uci("e7e5")
 
     monkeypatch.setattr(player_module, "validate_bot_account", fake_validate)
@@ -198,7 +198,7 @@ async def test_bot_move_not_processed_twice(monkeypatch):
 
     make_move_mock = AsyncMock()
 
-    async def fake_best_move(engine, board):
+    async def fake_best_move(engine, board, move_time=0.5):
         return chess.Move.from_uci("e7e5")
 
     monkeypatch.setattr(player_module, "validate_bot_account", fake_validate)
@@ -329,7 +329,7 @@ async def test_capture_quip_has_capture_true(monkeypatch):
         # 3 half-moves played; it's Black's turn
         yield make_gamefull("human", "chesspersonadbot", moves="e2e4 e7e5 d2d4")
 
-    async def fake_best_move(engine, board):
+    async def fake_best_move(engine, board, move_time=0.5):
         return chess.Move.from_uci("e5d4")   # pawn captures d4
 
     monkeypatch.setattr(player_module, "stream_game", fake_stream_game)
@@ -356,7 +356,7 @@ async def test_non_capture_quip_has_capture_false(monkeypatch):
     async def fake_stream_game(game_id):
         yield make_gamefull("human", "chesspersonadbot", moves="e2e4")
 
-    async def fake_best_move(engine, board):
+    async def fake_best_move(engine, board, move_time=0.5):
         return chess.Move.from_uci("e7e5")   # pawn advance, no capture
 
     monkeypatch.setattr(player_module, "stream_game", fake_stream_game)
@@ -384,7 +384,7 @@ async def test_ai_check_quip_has_delay_flag(monkeypatch):
         # 4 half-moves: e2e4 g7g5 d2d4 f7f5 — White to move
         yield make_gamefull("chesspersonadbot", "human", moves="e2e4 g7g5 d2d4 f7f5")
 
-    async def fake_best_move(engine, board):
+    async def fake_best_move(engine, board, move_time=0.5):
         return chess.Move.from_uci("d1h5")   # Qh5+ — check, no capture
 
     monkeypatch.setattr(player_module, "stream_game", fake_stream_game)
@@ -429,7 +429,7 @@ async def test_capture_and_check_uses_capture_flag(monkeypatch):
         # Bot is White; 6 moves played, it's White's turn
         yield make_gamefull("chesspersonadbot", "human", moves=scholar_moves)
 
-    async def fake_best_move(engine, board):
+    async def fake_best_move(engine, board, move_time=0.5):
         return chess.Move.from_uci("h5f7")   # Qxf7# — capture + checkmate
 
     monkeypatch.setattr(player_module, "stream_game", fake_stream_game)
@@ -443,3 +443,71 @@ async def test_capture_and_check_uses_capture_flag(monkeypatch):
     assert len(capture_quips) >= 1, (
         f"Expected capture=True on capture+checkmate quip, got: {quip_events}"
     )
+
+
+# ─── Difficulty ───────────────────────────────────────────────────────────────
+
+def test_resolve_difficulty_known_keys():
+    for key, cfg in player_module.DIFFICULTIES.items():
+        resolved, resolved_cfg = player_module.resolve_difficulty(key)
+        assert resolved == key
+        assert resolved_cfg is cfg
+
+
+def test_resolve_difficulty_is_case_and_space_insensitive():
+    assert player_module.resolve_difficulty("  BEGINNER ")[0] == "beginner"
+
+
+def test_resolve_difficulty_falls_back_on_unknown():
+    for bad in ("nonsense", "", None, "grandmaster"):
+        assert player_module.resolve_difficulty(bad)[0] == player_module.DEFAULT_DIFFICULTY
+
+
+def test_every_difficulty_is_well_formed():
+    for key, cfg in player_module.DIFFICULTIES.items():
+        assert set(cfg) == {"label", "elo", "move_time", "blurb"}
+        assert cfg["move_time"] > 0
+        # elo None means "full strength"; otherwise within Stockfish's range
+        assert cfg["elo"] is None or 1320 <= cfg["elo"] <= 3190
+
+
+def test_configure_strength_clamps_to_engine_range():
+    """An Elo below the engine's floor is clamped, not passed through."""
+    class FakeOption:
+        def __init__(self, lo, hi): self.min, self.max = lo, hi
+
+    class FakeEngine:
+        options = {"UCI_Elo": FakeOption(1320, 3190), "UCI_LimitStrength": FakeOption(None, None)}
+        def __init__(self): self.configured = None
+        def configure(self, opts): self.configured = opts
+
+    eng = FakeEngine()
+    player_module._configure_strength(eng, 800)
+    assert eng.configured == {"UCI_LimitStrength": True, "UCI_Elo": 1320}
+
+    eng2 = FakeEngine()
+    player_module._configure_strength(eng2, 9999)
+    assert eng2.configured == {"UCI_LimitStrength": True, "UCI_Elo": 3190}
+
+
+def test_configure_strength_none_leaves_engine_untouched():
+    class FakeEngine:
+        options = {}
+        def __init__(self): self.configured = None
+        def configure(self, opts): self.configured = opts
+
+    eng = FakeEngine()
+    player_module._configure_strength(eng, None)
+    assert eng.configured is None
+
+
+def test_configure_strength_survives_engine_without_elo_support():
+    """An engine lacking UCI_Elo must not raise — it just plays full strength."""
+    class FakeEngine:
+        options = {}
+        def __init__(self): self.configured = None
+        def configure(self, opts): self.configured = opts
+
+    eng = FakeEngine()
+    player_module._configure_strength(eng, 1600)   # must not raise
+    assert eng.configured is None
