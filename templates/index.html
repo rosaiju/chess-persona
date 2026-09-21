@@ -53,7 +53,7 @@
     .controls-card .senserobot-row { background: #faf7f3; box-shadow: none; }
 
     /* ── Button row ── */
-    .btn-row { display: flex; gap: 8px; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
     .btn-row .btn-primary { flex: 1; width: auto; }
     .btn-row .btn-rematch { flex: 0 0 auto; width: auto; padding: 11px 16px; }
 
@@ -141,6 +141,13 @@
       box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
     .btn-rematch:hover { border-color: #a89880; color: #1c1710; background: #f8f5f0; }
+    .btn-resign {
+      background: #fff; color: #8b1a1a; border: 1.5px solid #f0b8b8;
+      border-radius: 7px; padding: 11px 16px; font-size: 0.85rem;
+      font-weight: 600; cursor: pointer; transition: all 0.15s;
+    }
+    .btn-resign:hover { background: #fdf0f0; border-color: #d98080; }
+    .btn-resign:disabled { opacity: 0.5; cursor: default; }
 
     /* ── Status badges ── */
     .status-badge {
@@ -521,6 +528,7 @@
       <div class="btn-row">
         <button class="btn-primary" id="play-btn" onclick="startGame()">Play</button>
         <button class="btn-rematch" id="rematch-btn" onclick="rematch()" style="display:none">↩ Rematch</button>
+        <button class="btn-resign" id="resign-btn" onclick="resignGame()" style="display:none">Resign</button>
       </div>
 
       <div class="status-badge" id="status-badge"></div>
@@ -940,10 +948,12 @@
         setStatus(`Challenging ${e.opponent}…`, 'blue'); break;
       case 'waiting':
         currentGameId = e.gameId;
+        showResign(true);
         setStatus(`Waiting for ${e.opponent} to accept…`, 'blue');
         setGameLink(e.url); addLog(`Challenge sent → ${e.url}`); break;
       case 'started':
         currentGameId = e.gameId; lastOpponent = e.opponent; aiSide = e.ai_side || 'black';
+        showResign(true);
         chess = new Chess();
         const blackPov = (aiSide === 'white');
         renderBoard(START_FEN, blackPov);
@@ -998,7 +1008,7 @@
       case 'error':
         setStatus(`Error: ${e.text}`, 'red'); addLog(`Error: ${e.text}`);
         document.getElementById('play-btn').disabled = false;
-        setDifficultyEnabled(true);
+        setDifficultyEnabled(true); showResign(false);
         document.getElementById('play-btn').textContent = 'Play';
         document.getElementById('opp-input').disabled = false; break;
       case 'done': {
@@ -1010,7 +1020,7 @@
         addLog(`Game over: ${e.result || e.status}`);
         if (e.url) setGameLink(e.url);
         document.getElementById('play-btn').disabled = false;
-        setDifficultyEnabled(true);
+        setDifficultyEnabled(true); showResign(false);
         document.getElementById('play-btn').textContent = 'Play Again';
         document.getElementById('opp-input').disabled = false;
         if (lastOpponent) document.getElementById('rematch-btn').style.display = '';
@@ -1475,6 +1485,34 @@
   // ── Start game ────────────────────────────────────────────────────────────────
   function rematch() { document.getElementById('opp-input').value = lastOpponent; startGame(); }
 
+  function showResign(on) {
+    const btn = document.getElementById('resign-btn');
+    btn.style.display = on ? '' : 'none';
+    if (on) { btn.disabled = false; btn.textContent = 'Resign'; }
+  }
+
+  async function resignGame() {
+    if (!currentGameId) return;
+    if (!confirm('End this game? The robot resigns immediately.')) return;
+    const btn = document.getElementById('resign-btn');
+    btn.disabled = true;
+    btn.textContent = 'Ending…';
+    try {
+      const res = await fetch(`/game/${currentGameId}/resign`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || `Server error ${res.status}`);
+      addLog(`Game ${data.action} by you.`);
+      _resetTTS();          // drop any quip still waiting on its delay timer
+      // The /play stream sends `done` once Lichess reports the game over,
+      // which restores the controls. Nothing else to do here.
+    } catch (e) {
+      addLog(`Could not end game: ${e.message}`);
+      setStatus(`Could not end game: ${e.message}`, 'red');
+      btn.disabled = false;
+      btn.textContent = 'Resign';
+    }
+  }
+
   async function startGame() {
     const opponent = document.getElementById('opp-input').value.trim();
     if (!opponent) { document.getElementById('opp-input').focus(); return; }
@@ -1485,6 +1523,7 @@
     document.getElementById('play-btn').textContent = 'Connecting…';
     document.getElementById('opp-input').disabled = true;
     document.getElementById('rematch-btn').style.display = 'none';
+    showResign(false);
     document.getElementById('log').innerHTML = '';
     document.getElementById('game-link').style.display = 'none';
     document.getElementById('game-info').style.display = 'none';
@@ -1522,7 +1561,7 @@
     } catch (err) {
       setStatus(`Error: ${err.message}`, 'red'); addLog(`Error: ${err.message}`);
       document.getElementById('play-btn').disabled = false;
-      setDifficultyEnabled(true);
+      setDifficultyEnabled(true); showResign(false);
       document.getElementById('play-btn').textContent = 'Play';
       document.getElementById('opp-input').disabled = false;
     }

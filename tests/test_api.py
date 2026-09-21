@@ -347,3 +347,69 @@ def test_senserobot_client_does_not_speak_quips():
     assert "speak(" not in quip_section, (
         "senserobot_client.py quip handler must not call speak() — browser handles all TTS"
     )
+
+
+# ─── Stopping a game ──────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_stop_game_resigns_when_game_is_under_way(monkeypatch):
+    calls = []
+
+    async def ok(gid):    calls.append("resign"); return True
+    async def never(gid): calls.append("other");  return False
+
+    monkeypatch.setattr(api, "resign_game", ok)
+    monkeypatch.setattr(api, "abort_game", never)
+    monkeypatch.setattr(api, "cancel_challenge", never)
+
+    assert await api.stop_game("abc12345") == "resigned"
+    assert calls == ["resign"], "must not keep trying once resign succeeds"
+
+
+@pytest.mark.asyncio
+async def test_stop_game_falls_through_to_abort(monkeypatch):
+    async def no(gid):  return False
+    async def yes(gid): return True
+
+    monkeypatch.setattr(api, "resign_game", no)
+    monkeypatch.setattr(api, "abort_game", yes)
+    monkeypatch.setattr(api, "cancel_challenge", no)
+
+    assert await api.stop_game("abc12345") == "aborted"
+
+
+@pytest.mark.asyncio
+async def test_stop_game_falls_through_to_cancel_for_pending_challenge(monkeypatch):
+    async def no(gid):  return False
+    async def yes(gid): return True
+
+    monkeypatch.setattr(api, "resign_game", no)
+    monkeypatch.setattr(api, "abort_game", no)
+    monkeypatch.setattr(api, "cancel_challenge", yes)
+
+    assert await api.stop_game("abc12345") == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_stop_game_skips_endpoints_that_raise(monkeypatch):
+    """A network error on one endpoint must not prevent trying the next."""
+    async def boom(gid): raise RuntimeError("network down")
+    async def yes(gid):  return True
+
+    monkeypatch.setattr(api, "resign_game", boom)
+    monkeypatch.setattr(api, "abort_game", boom)
+    monkeypatch.setattr(api, "cancel_challenge", yes)
+
+    assert await api.stop_game("abc12345") == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_stop_game_raises_when_nothing_works(monkeypatch):
+    async def no(gid): return False
+
+    monkeypatch.setattr(api, "resign_game", no)
+    monkeypatch.setattr(api, "abort_game", no)
+    monkeypatch.setattr(api, "cancel_challenge", no)
+
+    with pytest.raises(RuntimeError):
+        await api.stop_game("abc12345")

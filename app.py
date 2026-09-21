@@ -22,6 +22,7 @@ from analytics.db import get_insights, get_game, get_game_moves, get_coaching_re
 from analytics.coaching import generate_review as generate_coaching_review
 from lichess.api import (
     make_human_board_move,
+    stop_game,
     validate_bot_account,
     LICHESS_BOT_USERNAME,
     SENSEROBOT_LICHESS_USERNAME,
@@ -142,6 +143,23 @@ async def human_move(req: MoveRequest):
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"ok": True}
+
+
+@app.post("/game/{game_id}/resign")
+async def resign(game_id: str):
+    """
+    End the current game from the UI.
+
+    Resigns an in-progress game, aborts one still on its first move, or cancels
+    a challenge the opponent has not accepted — whichever Lichess allows. The
+    /play stream ends on its own once Lichess reports the game over.
+    """
+    try:
+        action = await stop_game(game_id)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    _log.info("[resign] %s: %s", game_id, action)
+    return {"ok": True, "action": action}
 
 
 @app.get("/review/{game_id}", response_class=HTMLResponse)

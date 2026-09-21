@@ -1,8 +1,16 @@
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent / "chess_analytics.db"
+# The live database lives at the repo root. CHESS_DB_PATH overrides it so the
+# test suite can point at a throwaway file — without it, running pytest writes
+# fake games into the real analytics DB and corrupts the insights.
+# It is read at import time, so it must be set before analytics.db is imported
+# (tests/conftest.py does this).
+DB_PATH = Path(
+    os.getenv("CHESS_DB_PATH") or (Path(__file__).parent.parent / "chess_analytics.db")
+)
 
 
 def _conn():

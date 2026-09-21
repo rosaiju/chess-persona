@@ -8,6 +8,7 @@ Covers:
 - _game_over_trigger results
 - capture flag on quip events (for SenseRobot TTS delay)
 """
+from pathlib import Path
 import time
 import chess
 import pytest
@@ -608,3 +609,30 @@ async def test_game_loop_does_not_sleep_for_the_arm_delay(monkeypatch):
     assert any(e["type"] == "quip" and e.get("delay_ms") == 30000 for e in events), (
         "the delay should be handed to the consumer, not dropped"
     )
+
+
+# ─── Database isolation ───────────────────────────────────────────────────────
+
+def test_tests_do_not_use_the_production_database():
+    """Guard the guard: a pytest run must never write to chess_analytics.db.
+
+    Without CHESS_DB_PATH (set in conftest.py before analytics.db is imported)
+    every run inserted a fake game into the real analytics DB, which then showed
+    up in the game count and the recent-games list.
+    """
+    from pathlib import Path
+    from analytics.db import DB_PATH
+
+    production = (Path(__file__).parent.parent / "chess_analytics.db").resolve()
+    assert Path(DB_PATH).resolve() != production
+    assert "test" in Path(DB_PATH).name.lower()
+
+
+def test_recorded_game_lands_in_the_test_database():
+    """Writes go somewhere, and that somewhere is the temp DB."""
+    from analytics.db import DB_PATH, record_game_start, get_game
+
+    record_game_start("isolation-probe", "someone", "Cocky", "white", "casual")
+    row = get_game("isolation-probe")
+    assert row is not None and row["difficulty"] == "casual"
+    assert "test" in Path(DB_PATH).name.lower()

@@ -2,3 +2,4 @@
 __pycache__/
 *.pyc
 chess_analytics.db
+chess_analytics.db.bak-*

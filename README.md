@@ -119,7 +119,17 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-All 37 tests should pass.
+All 44 tests should pass.
+
+Tests run against a temporary database (`CHESS_DB_PATH`, set in `tests/conftest.py`) and never touch `chess_analytics.db`.
+
+---
+
+## Ending a Game
+
+Click **Resign** (next to Play) to stop the current game. It resigns an
+in-progress game, aborts one still on its first move, or cancels a challenge the
+opponent hasn't accepted — whichever applies.
 
 ---
 

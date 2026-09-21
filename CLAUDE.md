@@ -98,6 +98,30 @@ Loaded once per game via `chess.engine.SimpleEngine` in a thread (to avoid block
 
 **Post-game analysis is unaffected** — `analytics/analysis.py` opens its own unrestricted engine, so accuracy and coaching are always measured against full-strength Stockfish regardless of the level played.
 
+### Ending a game early
+
+`POST /game/{game_id}/resign` stops whatever is in flight. Lichess accepts only
+one of resign / abort / cancel depending on state (under way / first move /
+challenge still pending), so `lichess/api.py::stop_game()` tries each in turn
+and reports which took. The `/play` stream ends on its own once Lichess reports
+the game over — the endpoint does not touch it.
+
+The UI shows a Resign button from `waiting` onward and hides it on every
+terminal event.
+
+## Testing
+
+`analytics/db.py` reads `CHESS_DB_PATH` at import time, falling back to
+`chess_analytics.db` at the repo root. `tests/conftest.py` sets that env var to
+a temp file **before** any test module imports `analytics.db` — that ordering is
+the whole point, since DB_PATH is resolved once at import.
+
+Without it, every pytest run inserted a fake `game1` into the live analytics DB
+(37 move rows per run), which then showed up in `/insights` as an extra game and
+sat at the top of the recent-games list. A session fixture asserts the test DB is
+not the production one, and `test_tests_do_not_use_the_production_database`
+checks the same thing.
+
 ## Key files
 
 - `app.py` — FastAPI routes, TTS endpoint, SSE broadcast infrastructure

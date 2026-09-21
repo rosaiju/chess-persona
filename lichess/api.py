@@ -98,6 +98,48 @@ async def resign_game(game_id: str) -> bool:
         return res.is_success
 
 
+async def abort_game(game_id: str) -> bool:
+    """Abort a game that is still in its first move. No result is recorded."""
+    async with httpx.AsyncClient() as client:
+        res = await client.post(
+            f"{BASE}/api/bot/game/{game_id}/abort", headers=_bot_headers()
+        )
+        return res.is_success
+
+
+async def cancel_challenge(challenge_id: str) -> bool:
+    """Withdraw a challenge the opponent has not accepted yet."""
+    async with httpx.AsyncClient() as client:
+        res = await client.post(
+            f"{BASE}/api/challenge/{challenge_id}/cancel", headers=_bot_headers()
+        )
+        return res.is_success
+
+
+async def stop_game(game_id: str) -> str:
+    """
+    End a game or challenge from the server side, whatever state it is in.
+
+    Lichess accepts only one of these depending on the state: resign once the
+    game is under way, abort while it is still on the first move, cancel while
+    the challenge is merely pending. Rather than tracking that, try each in
+    turn and report which one took.
+
+    Returns the action that succeeded, or raises RuntimeError if none did.
+    """
+    for action, fn in (
+        ("resigned", resign_game),
+        ("aborted", abort_game),
+        ("cancelled", cancel_challenge),
+    ):
+        try:
+            if await fn(game_id):
+                return action
+        except Exception:
+            continue
+    raise RuntimeError(f"Could not stop game {game_id} — Lichess rejected resign, abort and cancel")
+
+
 async def validate_bot_account() -> dict:
     """
     Validate that LICHESS_BOT_TOKEN belongs to a proper BOT account
